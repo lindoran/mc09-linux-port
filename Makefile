@@ -90,6 +90,17 @@ test: mcc09 asm09 slink
 
 # ── usim09 test: cc09 coordinator, usim09 target ─────────────────────────
 
+test-regen: mktarget
+	@echo "=== Regenerating usim09 target from config ==="
+	python3 mktarget targets/usim09/usim09.cfg /tmp/mc09-regen-test
+	@echo "=== Verifying generated target assembles correctly ==="
+	./mcc09 -I./include hello_clean.c hello_regen.asm
+	./slink hello_regen.asm s=CRT0.ASM l=/tmp/mc09-regen-test/lib09 hello_regen_lnk.asm
+	./asm09 hello_regen_lnk.asm -I l=hello_regen.lst c=hello_regen.HEX
+	@grep -c error hello_regen.lst || echo "0 errors"
+	@echo "" | timeout 5 $(USIM09) hello_regen.HEX || true
+	@rm -f hello_regen.asm hello_regen_lnk.asm hello_regen.lst hello_regen.HEX
+
 test-usim: all
 	@echo "=== cc09 -> usim09 (single command) ==="
 	MCDIR=. MCINCLUDE=./include MCLIBDIR=./targets/usim09/lib09 \
@@ -107,12 +118,17 @@ install: all
 	install -d $(PREFIX)/share/mc09/targets/usim09/lib09
 	install -m 755 mcc09 asm09 mco09 slink slib sindex sconvert cc09 mcp macro \
 	               $(PREFIX)/bin/
-	install -m 755 mc09pp $(PREFIX)/bin/
+	install -m 755 mc09pp mktarget $(PREFIX)/bin/
 	install -m 644 include/*.h                           $(PREFIX)/share/mc09/include/
 	install -m 644 lib09/[A-Z]*.ASM lib09/EXTINDEX.LIB  $(PREFIX)/share/mc09/lib09/
+	install -d $(PREFIX)/share/mc09/drivers
+	install -m 644 drivers/*.asm                         $(PREFIX)/share/mc09/drivers/
 	install -m 644 targets/usim09/lib09/*.ASM \
 	               targets/usim09/lib09/EXTINDEX.LIB     \
 	               $(PREFIX)/share/mc09/targets/usim09/lib09/
+	install -m 644 targets/usim09/usim09.cfg             $(PREFIX)/share/mc09/targets/usim09/
+	install -d $(PREFIX)/share/mc09/targets/coco
+	install -m 644 targets/coco/coco.cfg                 $(PREFIX)/share/mc09/targets/coco/
 	@echo ""
 	@echo "Installed. Typical use:"
 	@echo "  export MCDIR=$(PREFIX)/share/mc09"

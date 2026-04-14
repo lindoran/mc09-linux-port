@@ -10,15 +10,17 @@ Released as freeware. See `COPY.TXT` in the original archives for licence terms.
 
 ### Why?
 
-Micro‑C is one of those things that’s really relevant to telling the story of Dave. Since I like telling a story, I figured the best way to do that was to make it easier for more people to actually experience it.  I do know that Dave even built a VM called the DVM (Dunfield Virtual Machine), and it can compile and run most of his software when you need it.  I do think even though that is the case this is still worthwile, simply in a "Because it was there" capacity.  This is simply just my attempt to get a good thing into the hands of people looking for it, and I hope I've done that here.
+Micro‑C is one of those things that's really relevant to telling the story of Dave. Since I like telling a story, I figured the best way to do that was to make it easier for more people to actually experience it.  I do know that Dave even built a VM called the DVM (Dunfield Virtual Machine), and it can compile and run most of his software when you need it.  I do think even though that is the case this is still worthwile, simply in a "Because it was there" capacity.  This is simply just my attempt to get a good thing into the hands of people looking for it, and I hope I've done that here.
 
-Micro‑C is very intentional in how it’s built. It’s bootstrapped, properly structured, and written in its own syntax. Whoever wrote it clearly cared about doing it right, and if you’ve ever read anything Dave has written, you know he cares a lot about doing things well. The C compiler that builds the 6809 kit runs on DOS and doesn’t assume anything about its environment. All the passes and tools are modular, single‑file pieces, most of them tiny .COM programs. That means you can set up a Micro‑C compiler on just about any memory footprint. Each stage writes to standard out, so you can pipe one pass into the next or dump to disk if you’re crawling along on a 256K machine. It’s a bygone way of building a compiler, and that alone makes it interesting.
+Micro‑C is very intentional in how it's built. It's bootstrapped, properly structured, and written in its own syntax. Whoever wrote it clearly cared about doing it right, and if you've ever read anything Dave has written, you know he cares a lot about doing things well. The C compiler that builds the 6809 kit runs on DOS and doesn't assume anything about its environment. All the passes and tools are modular, single‑file pieces, most of them tiny .COM programs. That means you can set up a Micro‑C compiler on just about any memory footprint. Each stage writes to standard out, so you can pipe one pass into the next or dump to disk if you're crawling along on a 256K machine. It's a bygone way of building a compiler, and that alone makes it interesting.
 
-Micro‑C is also a C compiler for microcomputers first. That sounds strange until you look at what it was trying to solve. C was a pretty rough language to run on embedded microcontrollers, I/O controllers, and single‑board computers. These machines didn’t have the big register sets, memory, or instruction sets you’d find on a minicomputer or timesharing system. And that minicomputer environment is exactly where C came from. It was written to make programs more efficient and portable, and of course to build UNIX.
+Micro‑C is also a C compiler for microcomputers first. That sounds strange until you look at what it was trying to solve. C was a pretty rough language to run on embedded microcontrollers, I/O controllers, and single‑board computers. These machines didn't have the big register sets, memory, or instruction sets you'd find on a minicomputer or timesharing system. And that minicomputer environment is exactly where C came from. It was written to make programs more efficient and portable, and of course to build UNIX.
 
-Micro‑C flips the question around and asks: what can I do with what I have? It’s a small language that’s configurable, scalable, and useful. It lets you write a C program for that custom industrial controller you built for a client 13 years ago, the one that now needs an update because the automation uses a new relay. Micro‑C was written to do Dave’s work, consulting work, and honestly because Dave likes writing his own software. And it shows.
+Micro‑C flips the question around and asks: what can I do with what I have? It's a small language that's configurable, scalable, and useful. It lets you write a C program for that custom industrial controller you built for a client 13 years ago, the one that now needs an update because the automation uses a new relay. Micro‑C was written to do Dave's work, consulting work, and honestly because Dave likes writing his own software. And it shows.
 
-Tools like this fascinate me. They’re worth preserving or at least getting running cleanly on a modern OS. 
+Tools like this fascinate me. They're worth preserving or at least getting running cleanly on a modern OS.
+
+---
 
 ## Tools included
 
@@ -35,9 +37,11 @@ Tools like this fascinate me. They’re worth preserving or at least getting run
 | `sindex` | `sindex.c` | Source index builder (generates EXTINDEX.LIB from .ASM files) |
 | `sconvert` | `sconvert.c` | Source converter (prepares .ASM files for use as library modules) |
 | `mc09pp` | `mc09pp` (Python) | Minimal slink substitute for standalone testing without lib09 |
+| `mktarget` | `mktarget` (Python) | Target generator — creates a new `targets/<n>/lib09/` from a config file |
 
-**Not yet ported** (DOS binaries only, source available):
-- `make` — Dunfield's simple make utility (use GNU make instead — the makefile format is incompatible and the timestamp API is DOS-specific)
+**Not yet ported** (DOS binary only, source available):
+- `make` — Dunfield's simple make utility; use GNU make instead — the makefile format is incompatible and the timestamp API is DOS-specific
+
 **No source, DOS-only:**
 - `ddside` — integrated development environment (GUI, not portable)
 - `srenum`, `sreg`, `touch` — minor utilities with trivial Linux equivalents
@@ -54,13 +58,13 @@ Requires only `gcc` and `make`. The sources are K&R C compiled with
 `-std=gnu89` and a handful of `-Wno-*` flags to suppress the implicit-declaration
 warnings endemic to the Dunfield codebase.
 
-There are still warnings; bad looking ones.  However, these warnings don't cause any issues, 
-and don't seem to cause issue with any existing code. Keep in mind thats something
-that we will still need to tackle.  The goal here was to get it to compile, we will still
-have to work out the warnings at some point but for the most part its done.  
-I feel like this is mostly good enough for production.  The warnings dont translate into 
-the toolchain and are mostly just things that are gotchas you have to be careful about 
-in K&R as you are very much the 'captan' there and not the other way around.
+There are still some warnings after the build. The dangerous ones — truncated
+pointers from wrong `argv` types, buffer overflows from DOS-era 65-byte path
+buffers — have been fixed. What remains is two categories that are genuinely
+benign: `snprintf` truncation notices (correct behaviour for long paths) and
+`-Wmultichar` in `slib.c` (an intentional Dunfield technique that works correctly
+on GCC x86). These don't translate into toolchain bugs. K&R C is very much a
+"you are the captain" situation, and we've made sure the ship isn't taking on water.
 
 ---
 
@@ -70,19 +74,19 @@ in K&R as you are very much the 'captan' there and not the other way around.
 
 ```
   prog.c
-     │
-     ▼  mcp -I./include prog.c prog_pp.c        (optional full preprocessor)
+     |
+     v  mcp -I./include prog.c prog_pp.c        (optional full preprocessor)
   prog_pp.c         (macros expanded, #if resolved, ## paste applied)
-     │
-     ▼  mcc09 prog_pp.c prog.asm
+     |
+     v  mcc09 prog_pp.c prog.asm
   prog.asm          (Dunfield source-linked asm, contains $EX: directives)
-     │
-     ▼  [mco09 prog.asm prog_opt.asm]            (optional peephole optimizer)
-     │
-     ▼  slink prog.asm s=CRT0.ASM l=./lib09 prog_linked.asm
+     |
+     v  [mco09 prog.asm prog_opt.asm]            (optional peephole optimizer)
+     |
+     v  slink prog.asm s=CRT0.ASM l=./lib09 prog_linked.asm
   prog_linked.asm   (runtime prepended, $EX: resolved, ?-labels uniquified)
-     │
-     ▼  asm09 prog_linked.asm -I l=prog.lst c=prog.HEX
+     |
+     v  asm09 prog_linked.asm -I l=prog.lst c=prog.HEX
   prog.HEX          (Intel or Motorola HEX)
   prog.lst          (annotated listing)
 ```
@@ -94,7 +98,7 @@ export MCDIR=/path/to/mc09-linux-port   # tools location
 export MCINCLUDE=$MCDIR/include          # target headers
 export MCLIBDIR=$MCDIR/lib09            # target runtime library
 
-cc09 prog.c               # compile → prog.HEX (Motorola S-records)
+cc09 prog.c               # compile to prog.HEX (Motorola S-records)
 cc09 prog.c -POq          # preprocess + optimize, quiet
 cc09 prog.c -PIq S=CRT0.ASM  # Intel hex, usim09 startup, quiet
 ```
@@ -105,6 +109,7 @@ cc09 prog.c -PIq S=CRT0.ASM  # Intel hex, usim09 startup, quiet
 |------|--------|
 | `-P` | Run `mcp` full preprocessor before compiling |
 | `-O` | Run `mco09` peephole optimizer after compiling |
+| `-M` | Run `macro` assembly macro processor after compiling |
 | `-I` | Intel HEX output (default: Motorola S-records) |
 | `-C` | Include C source as comments in assembly output |
 | `-S` | Emit symbolic debug information |
@@ -124,8 +129,8 @@ features beyond `mcc09`'s built-in preprocessor:
 | Feature | Example |
 |---------|---------|
 | Parameterised macros | `#define MAX(a,b) ((a)>(b)?(a):(b))` |
-| `##` token-paste | `#define REG(b,o) b##o` → `0xC001` |
-| `#if` with expressions | `#if VERSION >= 3`, `#elif`, `&&`, `\|\|`, `<<`, `>>` |
+| `##` token-paste | `#define REG(b,o) b##o` gives `0xC001` |
+| `#if` with expressions | `#if VERSION >= 3`, `#elif`, `&&`, `||`, `<<`, `>>` |
 | `#undef` / `#forget` | Undefine a single macro or a whole block |
 | `#error` / `#message` | Compile-time diagnostics |
 | Predefined symbols | `__LINE__`, `__FILE__`, `__TIME__`, `__DATE__`, `__INDEX__` |
@@ -224,17 +229,69 @@ echo "" | usim09 prog.HEX
 
 Run `make test-usim` to see the full pipeline including simulator execution.
 
-### Adding a new target
-1. Create `targets/<name>/lib09/`
-2. Copy `EXTINDEX.LIB` from `lib09/` and all `.ASM` files except the three below
-3. Write **`CRT0.ASM`** — overrides `6809RLP.ASM` via `slink s=CRT0.ASM`:
-   sets `ORG` (code base), `LDS` (stack top), startup sequence, exit behaviour.
-   Copy the runtime arithmetic/comparison routines from `6809RLP.ASM`.
-4. Write **`SERIO.ASM`** — overrides `lib09/SERIO.ASM`:
-   set `?uart EQU <base>`, status register offsets, TX/RX ready bits.
-5. Write **`6809RLS.ASM`** — overrides the suffix: `?heap EQU *`, reset vector
-   at `$FFFE`, any other interrupt vectors.
-6. Compile: `MCLIBDIR=./targets/<name>/lib09 cc09 prog.c -Iq S=CRT0.ASM`
+### Adding a new target with `mktarget`
+
+`mktarget` generates a complete `targets/<n>/lib09/` from a single config file.
+It handles the memory map, exit behaviour, and vector table automatically, and
+selects the right IO driver for your hardware.
+
+```sh
+mktarget myboard.cfg targets/myboard
+
+MCDIR=. MCINCLUDE=./include MCLIBDIR=./targets/myboard/lib09 \
+  cc09 prog.c -Iq S=CRT0.ASM
+```
+
+Config file format (uses assembler `SET` syntax — see `targets/usim09/usim09.cfg`
+for a fully-commented reference):
+
+```asm
+CODE_ORG    SET     $E000   * ROM base address
+STACK_TOP   SET     $7F00   * initial stack pointer
+ROM_TARGET  SET     1       * 1=emit vector table, 0=RAM-only
+VECTOR_ORG  SET     $FFF0   * vector table address (ROM_TARGET=1 only)
+EXIT_MODE   SET     0       * 0=spin, 1=jump EXIT_ADDR, 2=SWI
+EXIT_ADDR   SET     $E082   * monitor re-entry (EXIT_MODE=1 only)
+IO_DRIVER   SET     "mc6850"
+UART_BASE   SET     $C000
+UART_STATUS SET     0       * status register offset from base
+UART_DATA   SET     1       * data register offset from base
+UART_TXRDY  SET     $02     * TX ready bit mask
+UART_RXRDY  SET     $01     * RX ready bit mask
+UART_CRLF   SET     1       * 1=translate LF->CRLF on output
+```
+
+IO drivers in `drivers/`:
+
+| Driver | Hardware | Notes |
+|--------|----------|-------|
+| `mc6850` | MC6850 ACIA | Parametric — uses all UART_* values |
+| `acia6551` | Rockwell 6551 ACIA | Parametric — Dunfield's default hardware |
+| `coco_rom` | CoCo 1/2 BASIC ROM vectors | Fixed addresses, no UART_* needed |
+| `none` | No I/O | Stub RTSes for bare-metal bring-up |
+
+The IO driver is intentionally separate from the config values because different
+hardware requires fundamentally different code — polling a UART status register,
+calling through a ROM vector table, and bit-banging a GPIO pin are three different
+programs, not three parameterisations of the same template.
+
+To add a new driver: place a `.asm` file in `drivers/` implementing `putstr`,
+`putch`, `putchr`, `getchr`, `chkchr`, `getch`, `getstr`, `chkch`. Use
+`{VARNAME}` placeholders for values substituted from the config. Tag conditional
+lines with `{CRLF_YES}` or `{CRLF_NO}` if they depend on `UART_CRLF`.
+
+### Adding a target manually
+
+If your hardware needs something `mktarget` can't express, you can hand-write
+the three files directly:
+
+1. Create `targets/<n>/lib09/` and copy everything from `lib09/` except the three below
+2. Write **`CRT0.ASM`** — `ORG`, `LDS`, startup, exit stub, then append the runtime
+   arithmetic/comparison routines from `lib09/6809RLP.ASM`
+3. Write **`SERIO.ASM`** — implement the eight IO functions for your hardware
+4. Write **`6809RLS.ASM`** — `?heap EQU *`, then optionally `ORG $FFF0` + vector table
+
+The `targets/usim09/` directory is a hand-written reference implementation.
 
 ---
 
@@ -253,8 +310,9 @@ Run `make test-usim` to see the full pipeline including simulator execution.
 | Target | Description |
 |--------|-------------|
 | `make` | Build all eleven tools |
-| `make test` | Manual pipeline: `hello.c` → slink → asm09 → Motorola HEX |
-| `make test-usim` | `cc09` single command → `hello_clean.HEX` → run in usim09 |
+| `make test` | Manual pipeline: `hello.c` to slink to asm09 to Motorola HEX |
+| `make test-usim` | `cc09` single command to `hello_clean.HEX` to run in usim09 |
+| `make test-regen` | Regenerate usim09 target via `mktarget` and verify it builds |
 | `make clean` | Remove binaries and generated files |
 | `make install` | Install to `PREFIX` (default `/usr/local`) |
 
@@ -280,7 +338,7 @@ Run `make test-usim` to see the full pipeline including simulator execution.
 
 7. **`optr` array index** — `char` used as index into `operand[200]`; wraps negative above 127. Fixed: `int`.
 
-8. **`itype`/`otype`/`post` opcode fields** — `char` holds values `0x81`–`0x8a` (>127). Fixed: `unsigned char`.
+8. **`itype`/`otype`/`post` opcode fields** — `char` holds values `0x81`-`0x8a` (>127). Fixed: `unsigned char`.
 
 9. **`isterm()` missing `\n`** — `fgets()` includes the trailing newline; `eval()` saw it as an unknown operator and fired "invalid expression syntax" after every correctly-assembled line. Fixed: `\n`, `\r`, `;` added to `isterm()`.
 
@@ -288,9 +346,9 @@ Run `make test-usim` to see the full pipeline including simulator execution.
 
 ### Source linker (`slink`): `slink.c`, `microc.h`
 
-11. **`sp_top` initialiser** — `= &string_pool` (pointer-to-array) → `= string_pool` (array decay).
+11. **`sp_top` initialiser** — `= &string_pool` (pointer-to-array) should be `= string_pool` (array decay).
 
-12. **`DIRSEP` and default library path** — `'\\'` → `'/'`; `"\\MC\\SLIB"` → `"./lib09"`.
+12. **`DIRSEP` and default library path** — `'\\'` to `'/'`; `"\\MC\\SLIB"` to `"./lib09"`.
 
 13. **`strbeg()`** — Dunfield Micro-C built-in absent from standard libraries. Added to `microc.h`.
 
@@ -300,7 +358,7 @@ Run `make test-usim` to see the full pipeline including simulator execution.
 
 15. **Multi-char constant option switches** — `case 'q-':` is implementation-defined in GCC. Rewrote as `if`/`else if` chains.
 
-16. **DOS `fopen` modes** — `"rv"`, `"wvq"`, `"rvq"` → `"r"`, `"w"`, `"r"`.
+16. **DOS `fopen` modes** — `"rv"`, `"wvq"`, `"rvq"` to `"r"`, `"w"`, `"r"`.
 
 17. **`sindex` directory traversal** — DOS `find_first()`/`find_next()` replaced with POSIX `glob()`.
 
@@ -316,52 +374,34 @@ Run `make test-usim` to see the full pipeline including simulator execution.
 
 22. **`MCLIBDIR` env var** — added to separate the tools directory from the target runtime library, enabling per-target builds.
 
+23. **`int *argv[]` type** — K&R declaration treated argv entries as `int *`, truncating 64-bit string pointers on assignment to `char *`. Fixed: `char *argv[]` in `cc09.c`, `slib.c`, `sindex.c`.
+
+24. **Buffer sizes** — DOS-era 65-byte path buffers enlarged to 256 bytes; `tail` command buffer enlarged to 1024; all `sprintf(tail,...)` calls converted to `snprintf`.
+
 ### Optimizer (`mco09`): `mco.c`
 
-23. **`#include "PC86.mco"`** → `#include "6809.mco"` — point at the 6809 optimization table.
+25. **`#include "PC86.mco"`** changed to `#include "6809.mco"` — point at the 6809 optimization table.
 
 ### Preprocessor (`mcp`): `mcp.c`
 
-24. **`<dos.h>` / `int86()` / `union REGS`** — used only to read the system clock for `__TIME__`/`__DATE__`. Replaced with POSIX `time()` + `localtime()`.
+26. **`<dos.h>` / `int86()` / `union REGS`** — used only to read the system clock for `__TIME__`/`__DATE__`. Replaced with POSIX `time()` + `localtime()`.
 
-25. **`fprint()` with `nargs()`** — Dunfield's Micro-C exposes a non-standard `nargs()` intrinsic that lets functions count their arguments by walking the call stack. Both implementations of `fprint()` relied on this. Replaced with a standard ANSI `va_list` variadic function.
+27. **`fprint()` with `nargs()`** — Dunfield's Micro-C exposes a non-standard `nargs()` intrinsic that lets functions count their arguments by walking the call stack. Both implementations of `fprint()` relied on this. Replaced with a standard ANSI `va_list` variadic function.
 
-26. **`##` token-paste operator** — mcp stored `##` literally in macro definitions but had no expansion handler. Added to `resolve_macro()`: strip trailing whitespace from output, skip `##`, skip leading whitespace, then continue — causing adjacent tokens to concatenate directly.
+28. **`##` token-paste operator** — mcp stored `##` literally in macro definitions but had no expansion handler. Added to `resolve_macro()`: strip trailing whitespace from output, skip `##`, skip leading whitespace, then continue — causing adjacent tokens to concatenate directly.
 
-27. **`-I<path>` flag** — mcp used `l=path` for include directories. Added `-I` matching the convention used by `mcc09` and standard C compilers. Added `MCINCLUDE` env var fallback.
+29. **`-I<path>` flag** — mcp used `l=path` for include directories. Added `-I` matching the convention used by `mcc09` and standard C compilers. Added `MCINCLUDE` env var fallback.
 
-### Porting notes (`macro.c`)
+### Assembly macro processor (`macro`): `macro.c`
 
-28. **`macsub[NUMSMACS]` declaration** — declared as `unsigned char` (flat
-    byte array) but used throughout as an array of pointers (`macsub[i] = freptr`,
-    `strcmp(macsub[i], ...)`, pointer arithmetic). On 16-bit DOS the array was
-    storing 2-byte pointers into what was effectively a contiguous pool; on
-    64-bit Linux this silently truncates 8-byte pointers to 1 byte. Fixed:
-    `unsigned char *macsub[NUMSMACS]`.
+30. **`macsub[NUMSMACS]` declaration** — declared as `unsigned char` (flat byte array) but used throughout as an array of pointers. On 16-bit DOS the array stored 2-byte pointers that fit; on 64-bit Linux this silently truncates 8-byte pointers to 1 byte. Fixed: `unsigned char *macsub[NUMSMACS]`.
 
-29. **`input_ptr` type** — declared in the `unsigned` global block as
-    `*input_ptr` (i.e. `unsigned *`), but used as a character pointer throughout
-    the expression evaluator. On 64-bit Linux, assignments from `unsigned char *`
-    functions truncated the pointer to 32 bits. Fixed: moved to its own
-    `unsigned char *input_ptr` declaration.
+31. **`input_ptr` type** — declared in the `unsigned` global block as `*input_ptr` (i.e. `unsigned *`), but used as a character pointer throughout the expression evaluator. On 64-bit Linux, assignments from `unsigned char *` functions truncated the pointer to 32 bits. Fixed: moved to its own `unsigned char *input_ptr` declaration.
 
-30. **Pointer-returning functions with implicit `int` return** — `skip_blank()`,
-    `skip_parm()`, `extract_parm()`, and `process_line()` all return
-    `unsigned char *` but had no explicit return type (K&R implicit `int`).
-    On 64-bit Linux, GCC generates code that sign-extends or zero-fills
-    the 32-bit `int` return to 64 bits, mangling the upper half of every
-    returned pointer. Fixed: explicit return types added to all definitions,
-    plus matching forward declarations before `main()` so call sites see the
-    correct type from the start.
+32. **Pointer-returning functions with implicit `int` return** — `skip_blank()`, `skip_parm()`, `extract_parm()`, and `process_line()` all return `unsigned char *` but had no explicit return type (K&R implicit `int`). On 64-bit Linux, GCC mangles the upper half of every returned pointer. Fixed: explicit return types on all definitions, plus matching forward declarations before `main()`.
 
-31. **`isend()` missing `\n` and `\r`** — the label/instruction scanner loop
-    `for(linptr = linebuf; !isend(chr=*linptr); ++linptr)` treated newlines as
-    non-terminating, so on Linux where `fgets()` includes `\n` in the buffer
-    it ran off the end of every line into unmapped memory. Fixed: `\n` and `\r`
-    added to `isend()` — same class of fix as `isterm()` in `asm09.c`.
+33. **`isend()` missing `\n` and `\r`** — the label/instruction scanner loop treated newlines as non-terminating, so on Linux where `fgets()` includes `\n` in the buffer it ran off the end of every line into unmapped memory. Fixed: `\n` and `\r` added to `isend()` — same class of fix as `isterm()` in `asm09.c`.
 
-32. **`get_date()`/`get_time()`** — DOS-specific Micro-C built-ins for reading
-    the system clock. Replaced with POSIX `time()` + `localtime()`.
+34. **`get_date()`/`get_time()`** — DOS-specific Micro-C built-ins for reading the system clock. Replaced with POSIX `time()` + `localtime()`.
 
-33. **`freptr = &buffer`** — same array-vs-pointer-to-array initialiser issue
-    as `slink`'s `sp_top`. Fixed: `freptr = buffer`.
+35. **`freptr = &buffer`** — same array-vs-pointer-to-array initialiser issue as `slink`'s `sp_top`. Fixed: `freptr = buffer`.
