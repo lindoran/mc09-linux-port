@@ -77,3 +77,4 @@
 #define	UNION	67		/* 'union' */
 #define	VOID	68		/* 'void' */
 #define	TYPEDEF	69		/* 'typedef' */
+#define	LONG	70		/* 'long' */

@@ -88,6 +88,4 @@ strchr
 -TOFUNS.ASM
 toupper
 tolower
--PUTNUM.ASM
-putnum
 $ RMB 

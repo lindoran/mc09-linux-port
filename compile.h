@@ -17,24 +17,24 @@
  *
  *	LITER_POOL, SYMBOL_SIZE, MAX_SYMBOL, DEFINE_POOL, MAX_DEFINE
  */
-#define LINE_SIZE	250			/* size of input line */
-#define	FILE_SIZE	64			/* maximum size of file name */
-#define SYMBOL_SIZE	15			/* # significant chars in symbol name */
-#define INCL_DEPTH	5			/* maximum depth of include files */
-#define DEF_DEPTH	5			/* maximum depth of define macros */
+#define LINE_SIZE	512			/* size of input line */
+#define	FILE_SIZE	256			/* maximum size of file name */
+#define SYMBOL_SIZE	31			/* # significant chars in symbol name */
+#define INCL_DEPTH	10			/* maximum depth of include files */
+#define DEF_DEPTH	10			/* maximum depth of define macros */
 #define EXPR_DEPTH	20			/* maximum depth of expression stack */
-#define LOOP_DEPTH	10			/* maximum depth of nested loops */
+#define LOOP_DEPTH	20			/* maximum depth of nested loops */
 #define MAX_ARGS	25			/* maximum # arguments to a function */
 #define MAX_SWITCH	50			/* maximum # active switch-case statements */
-#define MAX_ERRORS	10			/* # error before termination forced */
-#define MAX_DIMS	500			/* maximum # active array dimensions */
-#define MAX_DEFINE	150			/* maximum # define sumbols */
-#define DEFINE_POOL 2000		/* size of define string space */
-#define MAX_TYPEDEF	64			/* maximum # typedef names */
+#define MAX_ERRORS	25			/* # error before termination forced */
+#define MAX_DIMS	2000		/* maximum # active array dimensions */
+#define MAX_DEFINE	500			/* maximum # define symbols */
+#define DEFINE_POOL	8192		/* size of define string space */
+#define MAX_TYPEDEF	128			/* maximum # typedef names */
 
 #ifndef DEMO
-	#define MAX_SYMBOL	1000	/* maximum # active symbols */
-	#define LITER_POOL	20000	/* size of literal string space */
+	#define MAX_SYMBOL	4000	/* maximum # active symbols */
+	#define LITER_POOL	65535	/* size of literal string space */
 #else
 	#define MAX_SYMBOL	50		/* maximum # active symbols */
 	#define LITER_POOL	500		/* size of literal string space */
@@ -63,6 +63,8 @@
 #define	SYMTYPE		0x0030		/* symbol type (see below) */
 #define ARRAY		0x0008		/* symbol is an array */
 #define POINTER		0x0007		/* level of pointer indirection */
+/* Extended type bits — safe on LP64 Linux where unsigned is 32 bits */
+#define LONG_TYPE	0x10000		/* 32-bit storage type (long) */
 
 /*
  * Symbol type designator bits (SYMTYPE field above)

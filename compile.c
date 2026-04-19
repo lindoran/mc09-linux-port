@@ -28,7 +28,7 @@ static char *tokens[] = {
 	"int", "unsigned", "char", "static", "extern", "const", "register",
 	"if", "else", "while", "do", "for", "switch", "case",
 	"default", "return", "break", "continue", "goto", "sizeof",
-	"asm", "struct", "union", "void", "typedef", 0 };		/* end of table */
+	"asm", "struct", "union", "void", "typedef", "long", 0 };		/* end of table */
 
 /* Table defining expression operator precedence */
 static char priority[] = {
@@ -203,6 +203,7 @@ statement(token)
 		case INT:		/* integer variable declaration */
 		case UNSIGN:	/* unsigned variable declaration */
 		case CHAR:		/* 8 bit variable declaration */
+		case LONG:		/* 32 bit storage declaration */
 		case STAT:		/* static modifier */
 		case EXTERN:	/* external modifier */
 		case CONST:		/* constant modifier */
@@ -825,6 +826,17 @@ read_line()
 		test_if(1);
 	else if(match("#file"))					/* Filename override */
 		copy_string(file_name[file_depth], parse());
+	else if(match("#undef")) {				/* undefine a macro */
+		char *name = parse();
+		unsigned i;
+		for(i = 0; i < define_top; i += 2) {
+			if(equal_string(name, define_index[i])) {
+				define_top -= 2;
+				while(i < define_top) {
+					define_index[i]   = define_index[i+2];
+					define_index[i+1] = define_index[i+3];
+					i += 2; }
+				break; } } }
 	else									/* normal input line */
 		return;
 
@@ -1025,6 +1037,9 @@ get_type(token, type)
 				break;
 			case VOID :
 				type |= TVOID;
+				break;
+			case LONG:
+				type |= LONG_TYPE;
 				break;
 			case STAR:		/* pointer reference */
 				do {
@@ -1407,6 +1422,7 @@ declare_arg()
 		case INT:
 		case UNSIGN:
 		case CHAR:
+		case LONG:
 		case CONST:
 		case REGIS:
 		case STRUCT:
@@ -1594,7 +1610,7 @@ size_of_var(index)
 	if((type = s_type[index]) == STRUCTURE)
 		return s_dindex[index];
 
-	size = ((type & (POINTER | BYTE)) != BYTE) + 1;
+	size = (type & LONG_TYPE) ? 4 : ((type & (POINTER | BYTE)) != BYTE) + 1;
 	if(type & ARRAY) {
 		type = dim_pool[i = s_dindex[index]];
 		while(type--)
@@ -1837,6 +1853,7 @@ get_value()
 				case INT:		/* integer type */
 				case UNSIGN:	/* unsigned type */
 				case CHAR:		/* character type */
+				case LONG:		/* 32-bit storage type */
 				case CONST:		/* constant type */
 				case REGIS:		/* register type */
 				case VOID:		/* void type */
@@ -1887,7 +1904,10 @@ get_value()
 				default:
 					syntax_error(); }
 			sizeof_done:
-			v *= ((tt & (POINTER | BYTE)) != BYTE) + 1;
+			if(tt & LONG_TYPE)
+				v *= 4;
+			else
+				v *= ((tt & (POINTER | BYTE)) != BYTE) + 1;
 			while(flag--)
 				expect(CRB);
 			t = NUMBER;

@@ -33,7 +33,7 @@ FILE *fp_table[INCL_DEPTH+1] = { 0 }, *output_fp = 0;
 char quiet = 0;
 
 /* Include search path: set by -I option or MCINCLUDE env var */
-static char include_path[256] = "";
+static char include_path[FILE_SIZE] = "";
 
 #ifdef MODEL			/* compiler's with multiple memory models only */
 extern char model;					/* memory model to use */
@@ -140,7 +140,7 @@ put_num(value, file)
 	unsigned value;
 	unsigned file;
 {
-	char stack[6];
+	char stack[12];		/* 10 digits covers UINT32_MAX; 12 for safety */
 	register unsigned i;
 
 	i = 0;
@@ -178,7 +178,7 @@ f_open(name)
 	char *name;
 {
 	FILE *fp;
-	char clean[LINE_SIZE+1], fullpath[512];
+	char clean[FILE_SIZE+1], fullpath[FILE_SIZE*2+2];
 	char *p, *q;
 
 	/* Strip angle-bracket or quote delimiters from include filename */

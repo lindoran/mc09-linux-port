@@ -3,6 +3,8 @@
 A Linux port of Dave Dunfield's **Micro-C** cross-compiler toolchain for the
 Motorola 6809, originally a DOS-only product.
 
+**Related documentation:** [COMPILER.md](COMPILER.md) · [STDLIB.md](STDLIB.md)
+
 Original source: [Dunfield Development Services / Dave's Old Computers](https://dunfield.themindfactory.com)  
 Released as freeware. See `COPY.TXT` in the original archives for licence terms.
 
@@ -27,7 +29,7 @@ Tools like this fascinate me. They're worth preserving or at least getting runni
 | Tool | Source | Description |
 |------|--------|-------------|
 | `cc09` | `cc09.c` | **Command coordinator** — runs the full pipeline in one command |
-| `mcc09` | `compile.c` + `io.c` + `6809cg.c` | Micro-C 6809 cross-compiler (K&R C subset → 6809 asm) |
+| `mcc09` | `compile.c` + `io.c` + `6809cg.c` | Micro-C 6809 cross-compiler (K&R C subset → 6809 asm) with typedef, struct, long |
 | `mco09` | `mco.c` + `6809.mco` | Peephole optimizer (post-processes mcc09 output) |
 | `mcp` | `mcp.c` | Full C preprocessor — parameterised macros, `##`, `#if` expressions |
 | `macro` | `macro.c` | Assembly source macro processor — `SET`, `MACRO`/`ENDMAC`, `IFEQ`/`IFNE` |
@@ -58,12 +60,9 @@ Requires only `gcc` and `make`. The sources are K&R C compiled with
 `-std=gnu89` and a handful of `-Wno-*` flags to suppress the implicit-declaration
 warnings endemic to the Dunfield codebase.
 
-There are still some warnings after the build. The dangerous ones — truncated
-pointers from wrong `argv` types, buffer overflows from DOS-era 65-byte path
-buffers — have been fixed. What remains is two categories that are genuinely
-benign: `snprintf` truncation notices (correct behaviour for long paths) and
-`-Wmultichar` in `slib.c` (an intentional Dunfield technique that works correctly
-on GCC x86). These don't translate into toolchain bugs. K&R C is very much a
+There are still some warnings after the build. What remains is genuinely
+benign: `-Wmultichar` in `slib.c` (an intentional Dunfield technique that works correctly
+on GCC x86). This doesn't translate into a toolchain bug. K&R C is very much a
 "you are the captain" situation, and we've made sure the ship isn't taking on water.
 
 ---
@@ -309,7 +308,8 @@ The `targets/usim09/` directory is a hand-written reference implementation.
 
 | Target | Description |
 |--------|-------------|
-| `make` | Build all eleven tools |
+| `make` | Build all tools and generate `targets/coco/lib09/` |
+| `make env` | Generate `env.sh` — sourceable environment setup |
 | `make test` | Manual pipeline: `hello.c` to slink to asm09 to Motorola HEX |
 | `make test-usim` | `cc09` single command to `hello_clean.HEX` to run in usim09 |
 | `make test-regen` | Regenerate usim09 target via `mktarget` and verify it builds |
@@ -405,3 +405,60 @@ The `targets/usim09/` directory is a hand-written reference implementation.
 34. **`get_date()`/`get_time()`** — DOS-specific Micro-C built-ins for reading the system clock. Replaced with POSIX `time()` + `localtime()`.
 
 35. **`freptr = &buffer`** — same array-vs-pointer-to-array initialiser issue as `slink`'s `sp_top`. Fixed: `freptr = buffer`.
+
+---
+
+## Extensions beyond the original Linux port
+
+These features were added on top of the original DOS-to-Linux porting work.
+
+### Compiler extensions (`mcc09`)
+
+**`typedef`** — full typedef support including scalar types, pointer types,
+named struct typedefs, and anonymous struct typedefs. Works in all contexts:
+declarations, casts, `sizeof`, K&R-style function arguments.
+
+```c
+typedef unsigned char  uint8_t;
+typedef unsigned int   uint16_t;
+typedef struct { int x; int y; } Point;
+typedef struct Point   Point;        /* named struct typedef */
+typedef Color *        ColorPtr;     /* pointer typedef */
+```
+
+**`long` as a 32-bit storage type** — `long` and `unsigned long` allocate
+4 bytes. No expression-level arithmetic; use LONGMATH library functions.
+`sizeof(long)` returns 4. Works with typedef: `typedef long int32_t`.
+
+**`#undef`** — undefine a previously defined macro. Required for proper
+include guard behaviour.
+
+**`&struct_var`** — taking the address of a struct variable now works
+correctly. The pre-existing limitation where `&` rejected ARRAY-typed
+symbols has been fixed.
+
+**Table limits** — all compiler table sizes bumped for modern use:
+`MAX_SYMBOL` 4000, `LITER_POOL` 65535, `MAX_DEFINE` 500, `SYMBOL_SIZE` 31,
+`LINE_SIZE` 512, `FILE_SIZE` 256, `MAX_DIMS` 2000, `MAX_TYPEDEF` 128.
+
+### New headers (`include/`)
+
+**`stdint.h`** — fixed-width integer types: `int8_t`, `uint8_t`, `int16_t`,
+`uint16_t`, `int32_t`, `uint32_t`, and all `_MIN`/`_MAX` limit constants.
+
+**`stdbool.h`** — `bool`, `true`, `false`.
+
+### Build system
+
+**`make env`** — generates `env.sh`, a sourceable file that sets `MCDIR`,
+`MCINCLUDE`, `MCLIBDIR`, and `PATH`. Supports per-target selection via
+`MC09_TARGET=coco` or `MC09_TARGET=usim09`.
+
+**`make coco`** — generates `targets/coco/lib09/` from `targets/coco/coco.cfg`
+via `mktarget`. Included in `make all`.
+
+### usim09 target fix
+
+The `targets/usim09/lib09/6809RLM.ASM` RAM section `ORG` was commented out,
+causing all global variables to land in ROM space (writes silently discarded).
+Fixed: `ORG $0100` places globals in usim09's 32KB RAM.

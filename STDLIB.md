@@ -4,6 +4,8 @@ This document covers the runtime library that ships with the 6809 toolchain —
 what functions exist, what each one does, how they're organised, and the
 important quirks you need to know to use them effectively.
 
+**Related documentation:** [README.md](README.md) · [COMPILER.md](COMPILER.md)
+
 The library lives in `lib09/` as individual `.ASM` source files. The source
 linker (`slink`) pulls in only the modules actually referenced by your code,
 so you only pay for what you use. Library modules are identified by
@@ -295,21 +297,22 @@ initial `setjmp` call).
 ## Long (32-bit) arithmetic (`LONGMATH.ASM`)
 
 The library provides 32-bit integer arithmetic as explicit function calls.
-There is no `long` type in the compiler — these functions operate on 4-byte
-arrays passed by pointer.
+`long` is a 32-bit storage type in the compiler — declare variables with
+`long` or `int32_t` (from `stdint.h`) and operate on them via these
+functions. All arguments are passed as pointers to the 4-byte value.
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `longadd` | `longadd(char *n1, char *n2)` | n1 += n2 in-place |
-| `longsub` | `longsub(char *n1, char *n2)` | n1 -= n2 in-place |
-| `longmul` | `longmul(char *n1, char *n2)` | n1 *= n2 in-place |
-| `longdiv` | `longdiv(char *n1, char *n2)` | n1 /= n2 in-place (result in n1, remainder in `Longreg`) |
-| `longshl` | `longshl(char *n)` | n <<= 1 in-place |
-| `longshr` | `longshr(char *n)` | n >>= 1 in-place |
-| `longcmp` | `int longcmp(char *n1, char *n2)` | Compare: returns -1, 0, or 1 |
-| `longtst` | `int longtst(char *n)` | Test for zero: returns 0 if zero, nonzero otherwise |
-| `longcpy` | `longcpy(char *dst, char *src)` | Copy 32-bit value |
-| `longset` | `longset(char *n, int val)` | Set from 16-bit value (zero-extends) |
+| `longadd` | `longadd(long *n1, long *n2)` | n1 += n2 in-place |
+| `longsub` | `longsub(long *n1, long *n2)` | n1 -= n2 in-place |
+| `longmul` | `longmul(long *n1, long *n2)` | n1 *= n2 in-place |
+| `longdiv` | `longdiv(long *n1, long *n2)` | n1 /= n2 in-place (result in n1, remainder in `Longreg`) |
+| `longshl` | `longshl(long *n)` | n <<= 1 in-place |
+| `longshr` | `longshr(long *n)` | n >>= 1 in-place |
+| `longcmp` | `int longcmp(long *n1, long *n2)` | Compare: returns -1, 0, or 1 |
+| `longtst` | `int longtst(long *n)` | Test for zero: returns 0 if zero, nonzero otherwise |
+| `longcpy` | `longcpy(long *dst, long *src)` | Copy 32-bit value |
+| `longset` | `longset(long *n, int val)` | Set from 16-bit value (zero-extends) |
 
 The word size is controlled by `?LSIZE EQU 4` at the top of `LONGMATH.ASM`.
 To work with 64-bit values, change this to 8. The algorithms (shift-and-add
@@ -319,12 +322,14 @@ Numbers are stored **big-endian**: the most significant byte is at the lowest
 address. `Longreg` is a scratch 4-byte BSS variable used as a working
 register inside multiply and divide.
 
-Usage example:
+Usage example with `long` type:
 ```c
-char a[4], b[4];
-longset(a, 1000);   /* a = 1000 */
-longset(b, 999);    /* b = 999  */
-longadd(a, b);      /* a = 1999 */
+#include "stdint.h"
+
+int32_t a, b;
+longset(&a, 1000);  /* a = 1000 */
+longset(&b, 999);   /* b = 999  */
+longadd(&a, &b);    /* a = 1999 */
 ```
 
 ---
@@ -333,10 +338,12 @@ longadd(a, b);      /* a = 1999 */
 
 | Header | Contents |
 |--------|---------|
-| `6809io.h` | `NULL`, `EOF`, `_CPU_ 6809`, `extern` declarations for `printf`, `sprintf`, `concat` |
+| `stdint.h` | Fixed-width types: `int8_t`, `uint8_t`, `int16_t`, `uint16_t`, `int32_t`, `uint32_t` and `_MIN`/`_MAX` limits |
+| `stdbool.h` | `bool`, `true`, `false` (bool = unsigned char) |
 | `stddef.h` | `NULL`, `ptrdiff_t` (`int`), `size_t` (`unsigned`) |
-| `ctype.h` | Macro versions of character classification functions. **Requires `cc09 -P`** |
 | `limits.h` | `CHAR_MAX`, `CHAR_MIN`, `INT_MAX`, `INT_MIN`, `UINT_MAX` etc. |
+| `6809io.h` | `NULL`, `EOF`, `_CPU_ 6809`, `extern` declarations for `printf`, `sprintf`, `concat` |
+| `ctype.h` | Macro versions of character classification functions. **Requires `cc09 -P`** |
 | `setjmp.h` | `jmp_buf` typedef (CPU-specific, 4 bytes on 6809). **Requires `cc09 -P`** |
 | `stdarg.h` | `va_list`, `va_start`, `va_arg`, `va_end`, `va_func`. **Requires `cc09 -P`** |
 | `6809int.h` | Interrupt vector definitions (hardware-specific) |
@@ -366,8 +373,11 @@ Things you might expect from a standard C library that aren't here:
 - **`string.h`** — partial. `strlen`, `strcpy`, `strcat`, `strcmp`, `strchr`
   exist. No `strncpy`, `strncat`, `strncmp`, `strstr`, `strtok`, `memcmp`,
   `memmove`.
-- **Floating point** — nothing. Not in the type system, not in the library.
-  Use fixed-point arithmetic.
+- **Floating point** — nothing in the library. `float` and `double` are
+  not compiler types. A future `FLOATMATH.ASM` following the LONGMATH
+  pointer-based convention would be the natural extension point. For now,
+  use fixed-point arithmetic or declare a 4-byte `long` struct and call
+  software float routines directly.
 - **`time.h`** — nothing. No RTC abstraction.
 - **`assert.h`** — nothing. The `assert.h` file is present but empty.
 

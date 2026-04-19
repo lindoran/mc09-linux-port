@@ -1,0 +1,10 @@
+You can obtain a copy of the full source of USIM :
+
+https://github.com/raybellis/usim
+
+USIM is covered under the MPL-2.0
+The binary in the root of this repo is compiled from the unmodified source
+using commit: 2cf0704fbab4b080bc4a03e8faad75c5dd8caac0, and is covered under
+the same.
+
+The MPL-2.0 Full Licence Text is included in file USIM-LICENSE

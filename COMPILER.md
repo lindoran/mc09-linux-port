@@ -4,6 +4,8 @@ This document covers how the compiler actually works — its architecture,
 what the type system looks like under the hood, what language features
 are and aren't supported, and how the 6809 code generator makes decisions.
 
+**Related documentation:** [README.md](README.md) · [STDLIB.md](STDLIB.md)
+
 The compiler lives in three files: `compile.c` (2358 lines), `io.c` (215
 lines), and `6809cg.c` (807 lines). Total: around 3400 lines of K&R C,
 self-hosting, no external libraries beyond stdio.
@@ -48,10 +50,12 @@ same interface.
 
 ## The type system: one unsigned integer
 
-Every type in Micro-C is represented as a single 16-bit `unsigned` with
-bit fields packed in:
+Every type in Micro-C is represented as a single `unsigned` with bit fields
+packed in. On the original DOS platform `unsigned` was 16 bits; on Linux
+(LP64) it is 32 bits, and bit 16 is used for the `LONG_TYPE` extension:
 
 ```
+Bit 16   LONG_TYPE   — 32-bit storage type (long) [Linux port extension]
 Bit 15   REFERENCE   — symbol has been referenced (liveness tracking)
 Bit 14   INITED      — variable has an initializer
 Bit 13   ARGUMENT    — symbol is a function argument
@@ -76,11 +80,12 @@ The 3-bit POINTER field gives up to 7 levels of pointer indirection. Every
 decrements it. If you try to go past level 7, `line_error("Too many pointer
 levels")` fires.
 
-There is no float, no double, no long, no enum, no typedef, no bitfield.
-The official documentation states this explicitly: "Long/Double/Float/Enumerated
-types, Typedef and Bit fields" are unsupported. Some 32-bit integer support
-exists through the library (`LONGMATH.ASM`) but it is entirely library-level,
-not in the type system.
+There is no float, no double, no enum, no bitfield. `typedef` and `long`
+have been added as extensions (see below). The original documentation
+listed "Long/Double/Float/Enumerated types, Typedef and Bit fields" as
+unsupported. `long` is now a 32-bit storage type (no expression-level
+arithmetic; use LONGMATH), and `typedef` works fully including struct
+typedefs.
 
 ---
 
@@ -166,10 +171,9 @@ Everything you would expect from K&R C for embedded use:
 
 ### Notably absent
 
-- `float`, `double` — no floating point
-- `long` — no 32-bit integer type (library support only)
+- `float`, `double` — no floating point (library path possible via FLOATMATH)
+- `long` — 32-bit storage type only; no expression-level arithmetic (use LONGMATH)
 - `enum` — not in the keyword table
-- `typedef` — not supported
 - Bitfields in structs — not supported
 - Initialisation of non-static local variables — compile error
 - Nested function definitions — compile error
@@ -177,6 +181,13 @@ Everything you would expect from K&R C for embedded use:
 - Complex pointer declarators like `int (*fp)(int, char *)` — not supported;
   the documentation notes Micro-C does not support "complex declarations
   which use multiple levels of parentheses"
+
+### Added by this port
+
+- `typedef` — scalar, pointer, named struct, and anonymous struct typedefs
+- `long` / `unsigned long` — 32-bit storage type, 4 bytes, `sizeof` = 4
+- `#undef` — undefine a macro
+- `&struct_var` — address-of on struct variables (was incorrectly rejected)
 
 ---
 
