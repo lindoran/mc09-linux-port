@@ -84,11 +84,9 @@ unsigned break_stack[LOOP_DEPTH], continue_stack[LOOP_DEPTH],
 /* Option flags */
 char comment = 0,		/* Include 'C' source as comments */
 	fold = 0,			/* Fold literal strings */
-	line = 0;			/* Accept line numbers */
-
-#ifdef DEMO
-#include "c:\project\demonote.txt"
-#endif
+	line = 0,			/* Accept line numbers */
+	nowarn = 0;			/* Suppress unreferenced-symbol warnings (-W) */
+unsigned max_errors = MAX_ERRORS;	/* Max errors before abort (overridden by -eN) */
 
 /*
  * Copy a string - Return pointer to zero terminator
@@ -349,6 +347,13 @@ statement(token)
 					define_symbol(FUNCGOTO, ++next_lab);
 				def_label(s_dindex[sptr]);
 				break; }
+			/* typedef name used as local variable type? */
+			if(in_function < FUNC_CODE) {
+				unsigned tdi;
+				for(tdi = 0; tdi < td_top; ++tdi) {
+					if(equal_string(gsymbol, td_name[tdi])) {
+						declare(token, 0);
+						goto stmt_done; } } }
 		case ASM :
 			afix = -1;
 			if(!in_function) {
@@ -359,6 +364,7 @@ statement(token)
 			check_func();
 			unget_token(token);
 			evaluate(SEMI, 0); }
+	stmt_done: ;
 }
 
 /*
@@ -577,9 +583,6 @@ test_token:	for(;;) {
 		gvalue = literal_top;
 cs:		do {
 			if(literal_top >= LITER_POOL) {
-#ifdef DEMO
-				put_str(demo_text, 0);
-#endif
 				severe_error("String space exausted"); }
 			literal_pool[literal_top++] = i = read_special('"'); }
 		while(!(i & 0xff00));
@@ -630,6 +633,18 @@ cs:		do {
 				gsymbol[gvalue++] = chr;
 			++input_pos; }
 		gsymbol[gvalue] = 0;
+		/* Intercept __FILE__ and __LINE__ as dynamic predefined macros */
+		if(equal_string(gsymbol, "__LINE__")) {
+			gvalue = line_number;
+			return NUMBER; }
+		if(equal_string(gsymbol, "__FILE__")) {
+			gvalue = literal_top;
+			{ char *p = file_name[file_depth];
+			  do {
+				if(literal_top < LITER_POOL)
+					literal_pool[literal_top++] = *p;
+			  } while(*p++); }
+			return STRING; }
 		return SYMBOL; }
 
 /* not a token or special value */
@@ -709,6 +724,12 @@ read_special(delim)
 			break;
 		case 'b':				/* backspace */
 			c = 0x08;
+			break;
+		case 'a':				/* alert/bell */
+			c = 0x07;
+			break;
+		case 'v':				/* vertical tab */
+			c = 0x0b;
 			break;
 		case 'x' :				/* hex value */
 			c = get_number(16, 2);
@@ -837,6 +858,19 @@ read_line()
 					define_index[i+1] = define_index[i+3];
 					i += 2; }
 				break; } } }
+	else if(match("#error"))				/* compile-time error */
+		severe_error(input_pos);
+	else if(match("#warning")) {			/* compile-time warning (non-fatal) */
+		line_warning(input_pos); }
+	else if(match("#line")) {				/* line number/file override */
+		line_number = get_number(10, 0);
+		while(is_skip(*input_pos)) ++input_pos;
+		if(*input_pos == '"') {
+			char *p, *q;
+			q = ++input_pos;
+			p = file_name[file_depth];
+			while(*q && *q != '"') *p++ = *q++;
+			*p = 0; } }
 	else									/* normal input line */
 		return;
 
@@ -925,6 +959,18 @@ symbol_error(msg)
 }
 
 /*
+ * Report a warning involving a symbol name (non-fatal)
+ */
+symbol_error_warn(msg)
+	char *msg;
+{
+	char emsg[50];
+	*gsymbol &= 0x7f;
+	copy_string(copy_string(copy_string(emsg, msg), ": "), gsymbol);
+	line_warning(emsg);
+}
+
+/*
  * Output an error message with quoted text
  */
 text_error(msg, txt)
@@ -985,14 +1031,28 @@ line_error(message)
 	char *message;
 {
 	put_str(file_name[file_depth], 0);
-	put_chr('(', 0);
+	put_chr(':', 0);
 	put_num(line_number, 0);
-	put_str("): ", 0);
+	put_str(": error: ", 0);
 	put_str(message, 0);
 	put_chr('\n', 0);
 
-	if(++error_count == MAX_ERRORS)
+	if(++error_count == max_errors)
 		severe_error("Too many errors");
+}
+
+/*
+ * Report a compile warning (non-fatal, does not increment error count)
+ */
+line_warning(message)
+	char *message;
+{
+	put_str(file_name[file_depth], 0);
+	put_chr(':', 0);
+	put_num(line_number, 0);
+	put_str(": warning: ", 0);
+	put_str(message, 0);
+	put_chr('\n', 0);
 }
 
 /*
@@ -1228,7 +1288,7 @@ define_var(type, ssize)
 		line_error("Declaration must preceed code");
 
 /* calculate base variable size */
-	size = ((type & (BYTE | ARGUMENT | POINTER)) != BYTE) + 1;
+	size = (type & LONG_TYPE) ? 4 : ((type & (BYTE | ARGUMENT | POINTER)) != BYTE) + 1;
 
 /* evaluate any array indexes */
 	copy_string(temp, gsymbol);
@@ -1275,6 +1335,8 @@ define_var(type, ssize)
 
 	if(type & INITED) {				/* force immediate allocation */
 		k = sptr;
+		if(type & LONG_TYPE)
+			line_error("long: use longset/longcpy, not direct assignment");
 		if(in_function && !(type & STATIC))
 			line_error("Illegal initialization");
 		fflag = fold;
@@ -1393,8 +1455,8 @@ define_func(type)
 		while(local_top < MAX_SYMBOL) {
 			copy_string(gsymbol, s_name[local_top]);
 			if(!((token = s_type[local_top]) & REFERENCE)) {
-				symbol_error("Unreferenced");
-				--error_count; }	/* Only a warning */
+				if(!nowarn)
+					symbol_error_warn("Unreferenced"); }
 			if((token & (EXTERNAL|SYMTYPE)) == (EXTERNAL|FUNCGOTO))
 				symbol_error("Unresolved");
 			if((token & (STATIC|INITED)) == STATIC)
@@ -1470,9 +1532,6 @@ found_index:
 		index = struct_offset;
 
 	if(global_top > local_top) {
-#ifdef DEMO
-		put_str(demo_text, 0);
-#endif
 		severe_error("Symbol table full"); }
 
 	/* Record symbol table entry */
@@ -2403,7 +2462,8 @@ combine(type1, type2)
 
 /* preserve byte contents if both operands are 8 bit */
 /* preserve unsigned indication if either is unsigned */
-	return ((type1 & type2) & BYTE) | ((type1 | type2) & (UNSIGNED|TVOID));
+/* preserve long type if either operand is long */
+	return ((type1 & type2) & BYTE) | ((type1 | type2) & (UNSIGNED|TVOID|LONG_TYPE));
 }
 
 /*
@@ -2476,6 +2536,10 @@ load(atype, token, value, type)
 	if(type & SYMTYPE)
 		type_error();
 
+	/* Loading a long value directly into D is not supported — use longset/longcpy */
+	if((atype & LONG_TYPE) && !(atype & POINTER))
+		line_error("long: use longset/longcpy, not direct assignment");
+
 	if(token != IN_ACC) {		/* loading new value */
 		stack_register(STACK_ACC);
 		pend_opr = 0;
@@ -2490,6 +2554,8 @@ load(atype, token, value, type)
 store(atype, token, value, type)
 	unsigned atype, token, value, type;
 {
+	if((atype & LONG_TYPE) && !(atype & POINTER))
+		line_error("long: use longset/longcpy, not direct assignment");
 	switch(token) {
 		case SYMBOL:
 		case INDIRECT:

@@ -643,9 +643,10 @@ accval(oper, rtype, token, value, type)
 			break;
 		case _MULT:		/* multiply */
 			zflag = eflag = -1;
-			if((token == NUMBER) && (value == 2)) {	/* efficent *2 */
-				ptr = "LSLB\n ROLA";
-				break; }
+			if(token == NUMBER) {
+				if(value == 2) { ptr = "LSLB\n ROLA"; break; }
+				if(value == 4) { ptr = "LSLB\n ROLA\n LSLB\n ROLA"; break; }
+				if(value == 8) { ptr = "LSLB\n ROLA\n LSLB\n ROLA\n LSLB\n ROLA"; break; } }
 			ptr = runtime("?mul", type, 0);
 			break;
 		case _DIV:		/* divide */
@@ -687,10 +688,20 @@ accval(oper, rtype, token, value, type)
 			break;
 		case _EQ:		/* test for equal */
 			eflag = -1;
+			if(token == NUMBER && value == 0) {
+				/* x == 0: expand acc to full width then set zero_flag;
+				 * jump_if will emit CMPD #0 / TSTB inline, no JSR needed */
+				expand(rtype);
+				zero_flag = -1;
+				return; }
 			ptr = runtime("?eq", type, 0);
 			break;
 		case _NE:		/* test for not equal */
 			eflag = -1;
+			if(token == NUMBER && value == 0) {
+				expand(rtype);
+				zero_flag = -1;
+				return; }
 			ptr = runtime("?ne", type, 0);
 			break;
 		case _LT:		/* test for less than */

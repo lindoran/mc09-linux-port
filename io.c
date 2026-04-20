@@ -39,6 +39,8 @@ static char include_path[FILE_SIZE] = "";
 extern char model;					/* memory model to use */
 #endif
 extern char symbolic;				/* Symbolic output */
+extern char nowarn;					/* Suppress unreferenced warnings */
+extern unsigned max_errors;			/* Max errors before forced abort */
 
 #ifndef CPU
 #define CPU "PC86"
@@ -48,16 +50,9 @@ extern char symbolic;				/* Symbolic output */
 #define STRINGIFY_(x) #x
 #define STRINGIFY(x)  STRINGIFY_(x)
 
-#ifdef DEMO
-extern char demo_text[];
-char hello[] = { "DDS MICRO-C " STRINGIFY(CPU) " Compiler (Demo)\n\
-?COPY.TXT 1988-2005 Dave Dunfield\n\
-**See COPY.TXT**.\n" };
-#else
 char hello[] = { "DDS MICRO-C " STRINGIFY(CPU) " Compiler\n\
 ?COPY.TXT 1988-2005 Dave Dunfield\n\
 **See COPY.TXT**.\n" };
-#endif
 
 /*
  * Initialize I/O & execute compiler
@@ -87,6 +82,13 @@ main(argc, argv)
 				break;
 			case ('-'<<8)+'s' :		/* Symbolic output */
 				symbolic = -1;
+				break;
+			case ('-'<<8)+'W' :		/* Suppress unreferenced warnings */
+				nowarn = -1;
+				break;
+			case ('-'<<8)+'e' :		/* Max errors (-eN) */
+				if(*ptr)
+					max_errors = atoi(ptr);
 				break;
 			case ('-'<<8)+'I' :		/* Include path (-Ipath or -I path) */
 				if(*ptr)
@@ -226,12 +228,6 @@ get_lin(line)
 	char *line;
 {
 	register int chr, i;
-#ifdef DEMO
-	static unsigned line_count = 0;
-	if(++line_count >= MAX_LINES) {
-		put_str(demo_text, 0);
-		severe_error("Too many source lines"); }
-#endif
 
 	i = LINE_SIZE;
 	while(--i) {

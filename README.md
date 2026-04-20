@@ -3,8 +3,6 @@
 A Linux port of Dave Dunfield's **Micro-C** cross-compiler toolchain for the
 Motorola 6809, originally a DOS-only product.
 
-**Related documentation:** [COMPILER.md](COMPILER.md) · [STDLIB.md](STDLIB.md)
-
 Original source: [Dunfield Development Services / Dave's Old Computers](https://dunfield.themindfactory.com)  
 Released as freeware. See `COPY.TXT` in the original archives for licence terms.
 
@@ -429,9 +427,40 @@ typedef Color *        ColorPtr;     /* pointer typedef */
 **`long` as a 32-bit storage type** — `long` and `unsigned long` allocate
 4 bytes. No expression-level arithmetic; use LONGMATH library functions.
 `sizeof(long)` returns 4. Works with typedef: `typedef long int32_t`.
+Direct assignment (`long x = 100000`) is caught as a compile error with
+a clear message directing to `longset`/`longcpy`.
 
 **`#undef`** — undefine a previously defined macro. Required for proper
 include guard behaviour.
+
+**`#error message`** — compile-time error; aborts compilation with the
+supplied message.
+
+**`#warning message`** — compile-time diagnostic; prints
+`file:line: warning: message` and continues without incrementing the
+error count.
+
+**`#line N "file"`** — updates `line_number` and `file_name` for
+subsequent error reporting. Used by external preprocessors.
+
+**`__FILE__`** — expands to a string literal containing the current
+source filename, evaluated at the point of use.
+
+**`__LINE__`** — expands to the current source line number as an integer
+constant, evaluated at the point of use.
+
+**`\a` and `\v` escape sequences** — bell (0x07) and vertical tab (0x0b)
+now recognised in character and string literals.
+
+**GCC-compatible error format** — errors are now reported as
+`file:line: error: message` and warnings as `file:line: warning: message`,
+parseable by VS Code, Vim quickfix, Emacs compile-mode, and any other
+editor with a GCC error matcher.
+
+**`-W` flag** — suppresses unreferenced-variable warnings.
+
+**`-eN` flag** — overrides the maximum error count at runtime
+(default 25). Useful for seeing all errors in a large translation unit.
 
 **`&struct_var`** — taking the address of a struct variable now works
 correctly. The pre-existing limitation where `&` rejected ARRAY-typed
@@ -440,6 +469,14 @@ symbols has been fixed.
 **Table limits** — all compiler table sizes bumped for modern use:
 `MAX_SYMBOL` 4000, `LITER_POOL` 65535, `MAX_DEFINE` 500, `SYMBOL_SIZE` 31,
 `LINE_SIZE` 512, `FILE_SIZE` 256, `MAX_DIMS` 2000, `MAX_TYPEDEF` 128.
+
+**Multiply strength reduction** — `* 4` and `* 8` now emit inline shift
+pairs (`LSLB/ROLA`) instead of calling the `?mul` runtime routine, matching
+the existing `* 2` optimisation.
+
+**Inline `== 0` / `!= 0`** — comparisons against the constant zero no
+longer call `?eq` / `?ne`. The value is expanded in D and `zero_flag` is
+set, allowing `jump_if` to emit `CMPD #0` or `TSTB` inline.
 
 ### New headers (`include/`)
 

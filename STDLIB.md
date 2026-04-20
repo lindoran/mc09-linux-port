@@ -4,8 +4,6 @@ This document covers the runtime library that ships with the 6809 toolchain —
 what functions exist, what each one does, how they're organised, and the
 important quirks you need to know to use them effectively.
 
-**Related documentation:** [README.md](README.md) · [COMPILER.md](COMPILER.md)
-
 The library lives in `lib09/` as individual `.ASM` source files. The source
 linker (`slink`) pulls in only the modules actually referenced by your code,
 so you only pay for what you use. Library modules are identified by
@@ -379,7 +377,8 @@ Things you might expect from a standard C library that aren't here:
   use fixed-point arithmetic or declare a 4-byte `long` struct and call
   software float routines directly.
 - **`time.h`** — nothing. No RTC abstraction.
-- **`assert.h`** — nothing. The `assert.h` file is present but empty.
+- **`assert.h`** — present and functional via `cc09 -P`. `assert(c)` expands
+  to a `putstr` call showing file/line when `DEBUG` is defined; no-ops otherwise.
 
 ---
 

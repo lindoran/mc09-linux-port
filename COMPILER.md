@@ -4,10 +4,8 @@ This document covers how the compiler actually works — its architecture,
 what the type system looks like under the hood, what language features
 are and aren't supported, and how the 6809 code generator makes decisions.
 
-**Related documentation:** [README.md](README.md) · [STDLIB.md](STDLIB.md)
-
-The compiler lives in three files: `compile.c` (2358 lines), `io.c` (215
-lines), and `6809cg.c` (807 lines). Total: around 3400 lines of K&R C,
+The compiler lives in three files: `compile.c` (~2500 lines), `io.c` (~260
+lines), and `6809cg.c` (~810 lines). Total: around 3570 lines of K&R C,
 self-hosting, no external libraries beyond stdio.
 
 ---
@@ -99,7 +97,7 @@ Three bases, parsed by `get_token()`:
 - **Octal** — `0177` (starts with `0` followed by more digits)
 - **Hexadecimal** — `0x1F` (starts with `0x`)
 
-All integers are stored as `unsigned` (16-bit on 6809). There is no `L` or
+All integers are stored as `unsigned` (16-bit values on 6809). There is no `L` or
 `U` suffix. A value with the high bit set (e.g. `0x8000`) is treated as
 `UNSIGNED` automatically in the expression evaluator:
 ```c
@@ -119,7 +117,7 @@ Escape sequences are supported inside character and string constants
 
 ### String literals
 
-String literals are stored in `literal_pool[]` (20,000 bytes by default).
+String literals are stored in `literal_pool[]` (65,535 bytes by default).
 Each string gets an offset into the pool as its value; the code generator
 emits them as `FCB` sequences at the end of the output.
 
@@ -136,8 +134,8 @@ ROM space at the cost of a linear scan at compile time.
 
 There is no floating point support of any kind. `float` and `double` are
 not in the keyword table and will be silently treated as unknown symbols.
-If you need fractional arithmetic on a 6809 Micro-C target you are doing
-fixed-point arithmetic by hand.
+For fractional arithmetic, use fixed-point, or declare a 4-byte `long`
+variable and implement software float via library functions.
 
 ---
 
@@ -185,9 +183,20 @@ Everything you would expect from K&R C for embedded use:
 ### Added by this port
 
 - `typedef` — scalar, pointer, named struct, and anonymous struct typedefs
-- `long` / `unsigned long` — 32-bit storage type, 4 bytes, `sizeof` = 4
+- `long` / `unsigned long` — 32-bit storage type, 4 bytes, `sizeof` = 4; direct assignment is a compile error directing to `longset`/`longcpy`
 - `#undef` — undefine a macro
+- `#error message` — compile-time fatal diagnostic
+- `#warning message` — compile-time non-fatal diagnostic
+- `#line N "file"` — line number and filename override for error reporting
+- `__FILE__` — current source filename as a string literal (dynamic)
+- `__LINE__` — current source line number as an integer constant (dynamic)
+- `\a`, `\v` — bell and vertical tab escape sequences
 - `&struct_var` — address-of on struct variables (was incorrectly rejected)
+- GCC-compatible error format (`file:line: error: message`)
+- `-W` flag — suppress unreferenced-variable warnings
+- `-eN` flag — override maximum error count at runtime
+- `* 4` and `* 8` inline shift expansion (strength reduction)
+- Inline `== 0` / `!= 0` via `CMPD #0` / `TSTB` without runtime call
 
 ---
 
@@ -386,28 +395,30 @@ for branch inversion.
 
 From `compile.h`:
 
-| Parameter | Default | Notes |
-|-----------|---------|-------|
-| `LINE_SIZE` | 250 | Maximum source line length |
-| `SYMBOL_SIZE` | 15 | Significant characters in a symbol name |
-| `MAX_SYMBOL` | 1000 | Active symbol table entries (globals + locals) |
-| `INCL_DEPTH` | 5 | Maximum `#include` nesting |
-| `DEF_DEPTH` | 5 | Maximum `#define` macro expansion nesting |
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| `LINE_SIZE` | 512 | Maximum source line length |
+| `FILE_SIZE` | 256 | Maximum filename length |
+| `SYMBOL_SIZE` | 31 | Significant characters in a symbol name |
+| `MAX_SYMBOL` | 4000 | Active symbol table entries (globals + locals) |
+| `INCL_DEPTH` | 10 | Maximum `#include` nesting |
+| `DEF_DEPTH` | 10 | Maximum `#define` macro expansion nesting |
 | `EXPR_DEPTH` | 20 | Expression operator stack depth |
-| `LOOP_DEPTH` | 10 | Maximum nested loops |
+| `LOOP_DEPTH` | 20 | Maximum nested loops |
 | `MAX_ARGS` | 25 | Arguments per function |
 | `MAX_SWITCH` | 50 | Active `switch`/`case` statements |
-| `MAX_DIMS` | 500 | Active array dimension entries |
-| `MAX_DEFINE` | 150 | `#define` symbols (built-in preprocessor only) |
-| `DEFINE_POOL` | 2000 | `#define` string space (bytes) |
-| `LITER_POOL` | 20000 | String literal pool (bytes) |
+| `MAX_DIMS` | 2000 | Active array dimension entries |
+| `MAX_DEFINE` | 500 | `#define` symbols (built-in preprocessor only) |
+| `DEFINE_POOL` | 8192 | `#define` string space (bytes) |
+| `LITER_POOL` | 65535 | String literal pool (bytes) |
+| `MAX_TYPEDEF` | 128 | `typedef` names |
+| `MAX_ERRORS` | 25 | Errors before forced abort |
 
-Symbol names are significant to 15 characters. `very_long_name_a` and
-`very_long_name_b` are the same symbol.
+Symbol names are significant to 31 characters.
 
 Globals grow upward from index 0; locals grow downward from `MAX_SYMBOL`.
-They meet in the middle. With `MAX_SYMBOL=1000` you have a combined budget
-of 1000 symbol table entries for all globals plus all locals currently in
+They meet in the middle. With `MAX_SYMBOL=4000` you have a combined budget
+of 4000 symbol table entries for all globals plus all locals currently in
 scope.
 
 ---

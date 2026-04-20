@@ -31,15 +31,8 @@
 #define MAX_DEFINE	500			/* maximum # define symbols */
 #define DEFINE_POOL	8192		/* size of define string space */
 #define MAX_TYPEDEF	128			/* maximum # typedef names */
-
-#ifndef DEMO
-	#define MAX_SYMBOL	4000	/* maximum # active symbols */
-	#define LITER_POOL	65535	/* size of literal string space */
-#else
-	#define MAX_SYMBOL	50		/* maximum # active symbols */
-	#define LITER_POOL	500		/* size of literal string space */
-	#define	MAX_LINES	500		/* Maximum # source lines */
-#endif
+#define MAX_SYMBOL	4000		/* maximum # active symbols */
+#define LITER_POOL	65535		/* size of literal string space */
 
 /*
  * Bits found in the "type" entry of symbol table, also
