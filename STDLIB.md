@@ -1,5 +1,7 @@
 # Micro-C 6809 Standard Library
 
+[← Back to README](README.md)
+
 This document covers the runtime library that ships with the 6809 toolchain —
 what functions exist, what each one does, how they're organised, and the
 important quirks you need to know to use them effectively.
@@ -397,5 +399,10 @@ Any `.ASM` file can be added to the library. The process:
    sindex *.ASM
    ```
 
-After that, any C code that calls your new function will have it pulled in
-automatically via slink.
+---
+
+## See Also
+
+- [**README**](README.md) — Toolchain overview and build instructions
+- [**Compiler Internals**](COMPILER.md) — Architecture and code generation
+- [**Test Suite Addendum**](TESTS_ADDENDUM.md) — Bug fixes and library quirks

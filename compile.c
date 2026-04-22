@@ -1164,7 +1164,14 @@ define_typedef()
 			++type; }
 	else {
 		type = get_type(get_token(), 0);		/* scalar typedef */
-		td_sptr[td_top] = 0; }
+		td_sptr[td_top] = 0;
+		/* If get_type() resolved through a struct typedef it sets the
+		 * typedef_ssize side-channel.  define_typedef() does not consume
+		 * it (only declare() does), so clear it here to prevent the stale
+		 * value from corrupting the very next declaration that declare()
+		 * processes. */
+		if(typedef_ssize)
+			typedef_ssize = 0; }
 
 	expect_symbol();							/* alias name */
 	copy_string(td_name[td_top], gsymbol);

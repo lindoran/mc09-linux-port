@@ -688,12 +688,12 @@ accval(oper, rtype, token, value, type)
 			break;
 		case _EQ:		/* test for equal */
 			eflag = -1;
-			if(token == NUMBER && value == 0) {
-				/* x == 0: expand acc to full width then set zero_flag;
-				 * jump_if will emit CMPD #0 / TSTB inline, no JSR needed */
-				expand(rtype);
-				zero_flag = -1;
-				return; }
+			/* NOTE: the zero_flag optimisation is NOT applied here.
+			 * For != 0, jump_if(FALSE) correctly emits LBEQ (branch when
+			 * value is zero = condition is false).  For == 0 the same
+			 * LBEQ branches when value IS zero, i.e. when the condition
+			 * is TRUE — the opposite of what is wanted.  Always use ?eq
+			 * so the result in D is 0/1 and jump_if works correctly. */
 			ptr = runtime("?eq", type, 0);
 			break;
 		case _NE:		/* test for not equal */

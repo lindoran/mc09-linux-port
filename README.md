@@ -8,6 +8,15 @@ Released as freeware. See `COPY.TXT` in the original archives for licence terms.
 
 ---
 
+### Documentation
+
+- [**Compiler Internals**](COMPILER.md) — architecture, type system, and code generation
+- [**Standard Library**](STDLIB.md) — runtime routines, serial I/O, and string/math functions
+- [**Test Suite Addendum**](TESTS_ADDENDUM.md) — compiler quirks, bugs, and target-specific findings
+- [**Original Manuals**](mc-docs/) — the original Dunfield documentation for Micro-C and XASM09
+
+---
+
 ### Why?
 
 Micro‑C is one of those things that's really relevant to telling the story of Dave. Since I like telling a story, I figured the best way to do that was to make it easier for more people to actually experience it.  I do know that Dave even built a VM called the DVM (Dunfield Virtual Machine), and it can compile and run most of his software when you need it.  I do think even though that is the case this is still worthwile, simply in a "Because it was there" capacity.  This is simply just my attempt to get a good thing into the hands of people looking for it, and I hope I've done that here.
@@ -224,7 +233,7 @@ MCDIR=. MCINCLUDE=./include MCLIBDIR=./targets/usim09/lib09 \
 echo "" | usim09 prog.HEX
 ```
 
-Run `make test-usim` to see the full pipeline including simulator execution.
+Run `make test` to compile and run the full test suite against this target.
 
 ### Adding a new target with `mktarget`
 
@@ -306,12 +315,11 @@ The `targets/usim09/` directory is a hand-written reference implementation.
 
 | Target | Description |
 |--------|-------------|
-| `make` | Build all tools and generate `targets/coco/lib09/` |
+| `make` | Build all tools and regenerate `targets/coco/lib09/` and `targets/usim09/lib09/` |
+| `make test` | Compile and run the full test suite under usim09 |
+| `make test TEST=t06` | Run a single test suite by prefix |
 | `make env` | Generate `env.sh` — sourceable environment setup |
-| `make test` | Manual pipeline: `hello.c` to slink to asm09 to Motorola HEX |
-| `make test-usim` | `cc09` single command to `hello_clean.HEX` to run in usim09 |
-| `make test-regen` | Regenerate usim09 target via `mktarget` and verify it builds |
-| `make clean` | Remove binaries and generated files |
+| `make clean` | Remove binaries, test artefacts, and generated target lib09 directories |
 | `make install` | Install to `PREFIX` (default `/usr/local`) |
 
 ---
@@ -491,8 +499,9 @@ set, allowing `jump_if` to emit `CMPD #0` or `TSTB` inline.
 `MCINCLUDE`, `MCLIBDIR`, and `PATH`. Supports per-target selection via
 `MC09_TARGET=coco` or `MC09_TARGET=usim09`.
 
-**`make coco`** — generates `targets/coco/lib09/` from `targets/coco/coco.cfg`
-via `mktarget`. Included in `make all`.
+**`make coco`** / **`make usim09-target`** — generate the respective
+`targets/*/lib09/` directory from its config file via `mktarget`. Both
+are included in `make all` and removed by `make clean`.
 
 ### usim09 target fix
 

@@ -1,5 +1,7 @@
 # Micro-C 6809 Compiler Internals
 
+[← Back to README](README.md)
+
 This document covers how the compiler actually works — its architecture,
 what the type system looks like under the hood, what language features
 are and aren't supported, and how the 6809 code generator makes decisions.
@@ -448,15 +450,8 @@ call.
 
 ---
 
-## What "register" means
+## See Also
 
-The `register` keyword is supported but does not map to a physical 6809
-register. Instead, `register` functions receive an implicit first argument
-that is the argument count (passed in D before the call). This is the
-mechanism Dunfield uses to implement variadic-style functions in Micro-C —
-`register printf()` is a function that checks how many arguments it received
-by reading D on entry, which was set by the compiler to the argument count
-before the `JSR`.
-
-This is why the Dunfield library headers declare `printf` as
-`extern register printf()` rather than with a normal prototype.
+- [**README**](README.md) — Toolchain overview and build instructions
+- [**Standard Library**](STDLIB.md) — Runtime routines and library documentation
+- [**Test Suite Addendum**](TESTS_ADDENDUM.md) — Bug fixes and compiler quirks

@@ -21,15 +21,16 @@
 #   export MCLIBDIR=$$MCDIR/lib09           # or targets/usim09/lib09
 #   cc09 prog.c [-O optimizer] [-I Intel hex] [S=6809RLP.ASM] [-q quiet]
 #
-# make              build all tools
-# make test         hello end-to-end (manual pipeline, default lib)
-# make test-usim    hello via cc09, usim09 target, run in simulator
-# make clean        remove build outputs
-# make install      install to PREFIX (default /usr/local)
+# Targets:
+#   make                  build all tools and regenerate target lib09 directories
+#   make test             compile and run the full test suite under usim09
+#   make test TEST=t06    run a single test suite by prefix
+#   make env              generate env.sh — sourceable environment setup
+#   make clean            remove build outputs and generated target lib09 dirs
+#   make install          install to PREFIX (default /usr/local)
 
 PREFIX    ?= /usr/local
-USIM09    ?= $(shell which usim09 2>/dev/null || \
-               echo ./usim09)
+USIM09    ?= $(shell which usim09 2>/dev/null || echo ./usim09)
 
 CC        = gcc
 CFLAGS    = -std=gnu89 \
@@ -40,16 +41,31 @@ CFLAGS    = -std=gnu89 \
             -Wno-unused-function \
             -I.
 
-.PHONY: all test test-usim test-regen coco env clean install
+# Test filter — empty runs all suites; set to a prefix to run one:
+#   make test TEST=t06
+TEST ?=
 
-all: mcc09 asm09 mco09 slink slib sindex sconvert cc09 mcp macro coco
+_LIB09_SRCS := $(wildcard lib09/*.ASM lib09/*.LIB drivers/*.asm)
 
-# ── coco target: generate lib09/ from config ───────────────────────────────
+.PHONY: all test coco usim09-target env clean install
 
-targets/coco/lib09/EXTINDEX.LIB: targets/coco/coco.cfg mktarget $(wildcard lib09/*.ASM lib09/*.LIB drivers/*.asm)
+all: mcc09 asm09 mco09 slink slib sindex sconvert cc09 mcp macro coco usim09-target env
+
+# ── target lib09 generation ────────────────────────────────────────────────
+# Both target lib09 directories are generated from their config files via
+# mktarget. They rebuild whenever a config, base lib09 source, or driver
+# changes. `make clean` removes the generated directories; `make all`
+# recreates them.
+
+targets/coco/lib09/EXTINDEX.LIB: targets/coco/coco.cfg mktarget $(_LIB09_SRCS)
 	python3 mktarget targets/coco/coco.cfg targets/coco
 
 coco: targets/coco/lib09/EXTINDEX.LIB
+
+targets/usim09/lib09/EXTINDEX.LIB: targets/usim09/usim09.cfg mktarget $(_LIB09_SRCS)
+	python3 mktarget targets/usim09/usim09.cfg targets/usim09
+
+usim09-target: targets/usim09/lib09/EXTINDEX.LIB
 
 # ── build ──────────────────────────────────────────────────────────────────
 
@@ -83,40 +99,25 @@ mcp: mcp.c microc.h
 macro: macro.c xasm.h portab.h
 	$(CC) $(CFLAGS) -o $@ macro.c
 
-# ── smoke test: manual pipeline ───────────────────────────────────────────
+# ── test suite ─────────────────────────────────────────────────────────────
+# Compiles each tests/t*.c with cc09 against the usim09 target and runs the
+# resulting HEX file under the usim09 simulator.
+#
+# Full suite:        make test
+# Single suite:      make test TEST=t06
+#
+# Requires usim09 on PATH, or present in the root directory. HEX and
+# intermediate files produced during the run land in tests/ and are
+# removed by `make clean`.
 
-test: mcc09 asm09 slink
-	@echo "=== Compiling hello.c ==="
-	./mcc09 -I./include hello.c hello.asm
-	@echo "=== Linking ==="
-	./slink hello.asm l=./lib09 hello_linked.asm
-	@echo "=== Assembling ==="
-	./asm09 hello_linked.asm l=hello.lst c=hello.HEX
-	@echo "=== hello.HEX ==="
-	@cat hello.HEX
+test: all
+	@MCDIR=. \
+	 MCINCLUDE=./include \
+	 MCLIBDIR=./targets/usim09/lib09 \
+	 USIM=$(USIM09) \
+	 sh tests/run_tests.sh $(TEST)
 
-# ── usim09 test: cc09 coordinator, usim09 target ─────────────────────────
-
-test-regen: mktarget
-	@echo "=== Regenerating usim09 target from config ==="
-	python3 mktarget targets/usim09/usim09.cfg /tmp/mc09-regen-test
-	@echo "=== Verifying generated target assembles correctly ==="
-	./mcc09 -I./include hello_clean.c hello_regen.asm
-	./slink hello_regen.asm s=6809RLP.ASM l=/tmp/mc09-regen-test/lib09 hello_regen_lnk.asm
-	./asm09 hello_regen_lnk.asm -I l=hello_regen.lst c=hello_regen.HEX
-	@grep -c error hello_regen.lst || echo "0 errors"
-	@echo "" | timeout 5 $(USIM09) hello_regen.HEX || true
-	@rm -f hello_regen.asm hello_regen_lnk.asm hello_regen.lst hello_regen.HEX
-
-test-usim: all
-	@echo "=== cc09 -> usim09 (single command) ==="
-	MCDIR=. MCINCLUDE=./include MCLIBDIR=./targets/usim09/lib09 \
-	  ./cc09 hello_clean.c -Iq
-	@echo ""
-	@echo "=== Running hello_clean.HEX in usim09 ==="
-	@echo "" | timeout 5 $(USIM09) hello_clean.HEX || true
-
-# ── env.sh: sourceable environment setup ──────────────────────────────────
+# ── env.sh: sourceable environment setup ───────────────────────────────────
 
 env: env.sh
 
@@ -176,10 +177,6 @@ install: all env
 
 clean:
 	rm -f mcc09 asm09 mco09 slink slib sindex sconvert cc09 mcp macro
-	rm -f hello.asm hello_linked.asm hello.lst hello.HEX
-	rm -f hello_clean.asm hello_clean.HEX hello_test.asm hello_test_opt.asm
-	rm -f hello_usim_src.asm hello_usim_lnk.asm hello_usim.lst hello_usim.HEX
-	rm -f hello_clean_usim.asm hello_clean_usim.lst hello_clean_usim.HEX
-	rm -f test_arith.asm test_arith_linked.asm test_arith_linked.lst test_arith_linked.HEX
+	rm -f tests/*.HEX tests/*.asm tests/*.lst
 	rm -f '$$'[0-9] *.o env.sh
-	rm -rf targets/coco/lib09
+	rm -rf targets/coco/lib09 targets/usim09/lib09

@@ -749,8 +749,8 @@ read_line()
 					severe_error("Out of memory"); }
 				*define_ptr++ = 0;
 				++macro; }
-			else if(match("undef")) {			/* undefine a macro */
-				if((i = lookup_macro(-1)) != -1) {
+			else if(match("undef")) {			/* undefine a macro (silent no-op if not defined) */
+				if((i = lookup_macro(0)) != -1) {
 					if(i == (macro - 1))		/* last one, simple delete */
 						define_ptr = define_index[i];
 					else {						/* not last, reclaim space */
