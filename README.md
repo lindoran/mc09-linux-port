@@ -31,6 +31,16 @@ Tools like this fascinate me. They're worth preserving or at least getting runni
 
 ---
 
+### What this is
+
+Micro-C is for all intents and purposes an embedded c cross compiler for the 6809.  This will build code that can be targeted at a very small footprint SBC for example, or fit on a CoCo cartridge.  This isn't meant to bootstrap a posix os, this is meant for firmware and is very light.  The dialect is closer to K&R than ANSI C and it uses some very minimal aproaches to its back end to provide just what you need and nothing more for that application.
+
+No floats to speak of, no built in long arithmatic (though you get a longmath lib).  One of the enhancements provided with the linux port is a long storage type and typedef, to provide for building your own things like float or fixed point only if needed.
+
+The back end uses a regisger only set up to evaluate expressions, while this produces very fast code it does limit the logical operations to 16 bits, and some expected casting behaivor creates some interesting quirks. Interestingly enough the state machine is "sort of" stack based, and could be made to run that way, however the runtime can be made VERY small in its current state. Mostly this is just enough to drop a monitor onto your board, load a sensor, talk to a PIO, run a servo, or read a relay kind of C.  
+
+I did this as a fun project and plan to poke at it between projects.  I am not hugely good at systems programing so anything I've touched may have bugs, and I use antigenic AI to check the code, so there could be outright mistakes.  The test suite is meant to be the source of truth and so far it passes everything  I am hugely proud of the state this is in.
+
 ## Tools included
 
 | Tool | Source | Description |
