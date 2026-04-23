@@ -1902,7 +1902,23 @@ get_value()
 					||	(((tt1&(BYTE|POINTER))==BYTE) != ((tt&(BYTE|POINTER))==BYTE))) {
 						load(tt, t, v, tt1);
 						t = IN_ACC;
-						expand(tt); }
+
+						/* Narrowing int->char: B already holds the low 8 bits
+						 * from LDD/IN_ACC.  Force last_byte so expand() emits
+						 * SEX or CLRA to produce a correctly sign/zero-extended
+						 * 16-bit value.                                         */
+						if(((tt  & (BYTE|POINTER)) == BYTE) &&
+						   ((tt1 & (BYTE|POINTER)) != BYTE))
+							narrow_byte();
+
+						/* Widening char->int via explicit (int) cast: use the
+						 * SOURCE type's UNSIGNED flag, not the bare target type.
+						 * (int)unsigned_char_var must zero-extend (CLRA), not
+						 * sign-extend (SEX).  Without this, the cast strips
+						 * UNSIGNED and expand() always emits SEX.               */
+						expand(tt | ((((tt1 & (BYTE|POINTER)) == BYTE) &&
+						              ((tt  & (BYTE|POINTER)) != BYTE))
+						             ? (tt1 & UNSIGNED) : 0)); }
 					break;
 				default:					/* sub-expression */
 					unget_token(token);

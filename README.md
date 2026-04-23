@@ -484,6 +484,17 @@ editor with a GCC error matcher.
 correctly. The pre-existing limitation where `&` rejected ARRAY-typed
 symbols has been fixed.
 
+**`(char)` cast now works inline** — `(int)(char)expr` correctly truncates
+to 8 bits and sign-extends in-register, without requiring a storage bounce
+through a `char` variable. Added `narrow_byte()` to `6809cg.c`; the cast
+handler in `compile.c` calls it when narrowing int→char, causing `expand()`
+to emit `SEX` or `CLRA` correctly.
+
+**`(int)` of `unsigned char` now zero-extends** — reading an `unsigned char`
+struct member or global via `(int)` now emits `CLRA` (zero-extend) rather
+than `SEX` (sign-extend). The `UNSIGNED` bit from the source type is
+preserved through the cast widening path in `compile.c`.
+
 **Table limits** — all compiler table sizes bumped for modern use:
 `MAX_SYMBOL` 4000, `LITER_POOL` 65535, `MAX_DEFINE` 500, `SYMBOL_SIZE` 31,
 `LINE_SIZE` 512, `FILE_SIZE` 256, `MAX_DIMS` 2000, `MAX_TYPEDEF` 128.

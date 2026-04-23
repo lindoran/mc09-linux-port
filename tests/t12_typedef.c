@@ -46,7 +46,7 @@ main()
     s8  = -100; s16 = -1000;
     flag = true;
 
-    EXPECT_EQ("u8-val",   (int)a8  & 0xFF, 255)
+    EXPECT_EQ("u8-val",   (int)a8,  255)
     EXPECT_EQ("u16-val",  (int)a16,  1000)
     EXPECT_EQ("s8-val",   (int)s8,   -100)
     EXPECT_EQ("s16-val",  s16,      -1000)
@@ -67,8 +67,8 @@ main()
     EXPECT_EQ("sum-vec",  r, 37)
 
     red.r = 255; red.g = 0; red.b = 0;
-    EXPECT_EQ("rgb-r",    (int)red.r & 0xFF, 255)
-    EXPECT_EQ("rgb-g",    (int)red.g & 0xFF, 0)
+    EXPECT_EQ("rgb-r",    (int)red.r, 255)
+    EXPECT_EQ("rgb-g",    (int)red.g, 0)
 
     szb[0] = sizeof(uint8_t);   szb[1] = sizeof(uint16_t);
     szb[2] = sizeof(int8_t);    szb[3] = sizeof(int16_t);

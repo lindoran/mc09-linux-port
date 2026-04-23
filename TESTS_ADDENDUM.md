@@ -22,6 +22,8 @@ C patterns that previously failed.
 | **`mcp` `#undef`** | Allowed `#undef` of undefined macros to be a no-op (C standard compliant). | `mcp.c` |
 | **`&struct_var`** | Fixed compiler rejection of taking the address of a struct variable. | `compile.c` |
 | **Comment Scanning** | Fixed infinite loops/crashes with multi-line comments spanning file boundaries. | `compile.c` |
+| **`(char)` cast no-op** | `(int)(char)expr` now correctly truncates and sign-extends in-register values. Added `narrow_byte()` to set `last_byte` without re-emitting a load. | `6809cg.c`, `compile.c` |
+| **`unsigned char` sign-extends** | `(int)unsigned_char_member` now zero-extends (`CLRA`) instead of sign-extending (`SEX`). Source `UNSIGNED` bit preserved through the cast widening path. | `compile.c` |
 
 ---
 
@@ -98,22 +100,34 @@ of two pointer variables being decremented toward each other.
 
 ---
 
-## Compiler limitation: `(char)` cast of constants and int variables is a no-op
+## Bug fix: `(char)` cast of in-register values was a no-op
 
-**Affects:** `(int)(char)some_int_var` and `(int)(char)0x0141` — neither
-truncates nor sign-extends.
+**Fixed in:** `6809cg.c` (`narrow_byte()`) and `compile.c` (cast handler).
 
-**Root cause:** The `(char)` typecast sets the BYTE flag on the expression
-type, but the code generator only emits a `SEX` (sign-extend) instruction
-when loading a BYTE-typed symbol from *memory* (i.e. when a `char`-typed
-variable is loaded with `LDB`). Casting an already-in-register value does
-not re-emit the load.
+**Was broken:** `(int)(char)some_int_var` and `(int)(char)0x0141` did not
+truncate or sign-extend. The `(char)` typecast set the BYTE flag on the
+expression type, but the code generator only emitted `SEX` when loading
+a BYTE-typed symbol from *memory*. Casting an already-in-register value
+did not re-emit the load, so `last_byte` stayed zero and `expand()` was
+a no-op.
 
-**To narrow an int to signed 8-bit:**
+**Fix:** Added `narrow_byte()` to `6809cg.c`, which sets `last_byte`
+without emitting any instruction (B already holds the low 8 bits of D).
+The cast handler in `compile.c` calls `narrow_byte()` when narrowing
+int→char, then `expand()` emits `SEX` (or `CLRA` for unsigned) correctly.
+
+**After fix — all these work directly:**
+```c
+(int)(char)0x0141   /* → 65    (high byte dropped, no sign issue) */
+(int)(char)0x00FF   /* → -1    (sign-extended) */
+(int)(char)0x0080   /* → -128  (sign-extended) */
+```
+
+**Storage bounce workaround** (still valid, now agrees with direct cast):
 ```c
 char c; int n;
-c = some_int;   /* stores low 8 bits as byte in memory */
-n = c;          /* loads with LDB, then expand() emits SEX */
+c = some_int;   /* stores low 8 bits */
+n = c;          /* loads with LDB+SEX */
 ```
 
 **To get the low byte as unsigned (no sign extension):**
@@ -145,14 +159,33 @@ copy_point(dst, src)
 
 ---
 
-## Compiler limitation: unsigned char struct members sign-extend on read
+## Bug fix: `unsigned char` struct members sign-extended on read
 
-`unsigned char` struct members sign-extend into int when read via `(int)member`.
+**Fixed in:** `compile.c` (cast handler — widening path preserves `UNSIGNED`).
 
-**Workaround:** Mask with `& 0xFF` after the cast.
+**Was broken:** `unsigned char` struct members sign-extended into int when
+read via `(int)member`. The `UNSIGNED` bit was present in the source type
+(`s_type[sptr]`), but `get_type(INT, 0)` in the cast target produced a
+type with no `UNSIGNED` bit, so `expand()` always emitted `SEX` instead
+of `CLRA`.
+
+**Fix:** When the cast handler widens char→int, it now ORs the source
+type's `UNSIGNED` bit into the type passed to `expand()`. If the original
+member was `unsigned char`, `expand()` emits `CLRA` (zero-extend).
+
+**After fix — works without masking:**
 ```c
-EXPECT_EQ("pixel-r", (int)px.r & 0xFF, 255)
+struct Pixel { unsigned char r; unsigned char g; unsigned char b; };
+struct Pixel px;
+px.r = 255;
+(int)px.r   /* → 255, not -1 */
+px.g = 128;
+(int)px.g   /* → 128, not -128 */
 ```
+
+**The `& 0xFF` workaround** is no longer needed for `unsigned char` members
+read via `(int)`, but remains valid for plain `char` members where unsigned
+interpretation is wanted.
 
 ---
 
@@ -272,14 +305,15 @@ FUNCGOTO-typed value to a plain integer storage location.
 | `t04_strings.c` | strlen, strcpy, strcat, strcmp (with inversion note), strchr | 26 |
 | `t05_structs.c` | dot, arrow, nested, pass-by-value, array-of-structs, union, sizeof | 25 |
 | `t06_bitwise.c` | &, \|, ^, ~, <<, >>, compound assigns, bit manip, popcount | 37 |
-| `t07_casting.c` | char narrowing via storage, unsigned reinterpret, sign extension | 22 |
+| `t07_casting.c` | (char) inline narrowing (Fix 1), unsigned char struct members (Fix 2), storage path, unsigned reinterpret, sign extension | 33 |
 | `t08_funcptr.c` | switch dispatch, asm-indirect JSR,X, function address in asm | 17 |
 | `t09_printf.c` | sprintf %d %u %x %s %c, field width, left-justify, zero-fill | 24 |
 | `t10_preproc.c` | #define, parameterised macros, ##, #if, #ifdef, #undef, __LINE__ | 23 |
 | `t11_static.c` | static locals (persist), static globals, const, accumulation | 19 |
-| `t12_typedef.c` | typedef scalar/struct, long storage, stdint.h, stdbool.h, longcmp | 24 |
+| `t12_typedef.c` | typedef scalar/struct, uint8_t/int8_t zero/sign-extend (Fix 2), long, stdint.h, stdbool.h, longcmp | 24 |
 | `t13_malloc.c` | malloc, free, overlap check, free+realloc, coalescing | 19 |
 | `t14_stdlib.c` | abs, max, min, sqrt, memset, memcpy, atoi, toupper, tolower | 39 |
+| `t14b_ctype.c` | isalpha, isdigit, isspace, isupper, islower, isalnum, ispunct, iscntrl | 31 |
 ---
 
 ## See Also

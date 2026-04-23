@@ -515,6 +515,22 @@ expand(type)
 }
 
 /*
+ * Mark the accumulator as holding a byte-wide result without emitting code.
+ *
+ * Used by the cast handler in compile.c when an explicit (char) cast is
+ * applied to a value that was loaded as a 16-bit integer.  On the 6809,
+ * D = A:B; after LDD the low byte is already in B.  Setting last_byte here
+ * causes the subsequent expand() call to emit SEX (signed char) or CLRA
+ * (unsigned char) to produce the correct 16-bit sign/zero-extended result.
+ *
+ * No instruction is emitted — B already holds the correct low 8 bits.
+ */
+narrow_byte()
+{
+	last_byte = -1;
+}
+
+/*
  * Do a simple register operation
  */
 accop(oper, rtype)

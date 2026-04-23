@@ -159,7 +159,8 @@ Everything you would expect from K&R C for embedded use:
 - Pre/post increment and decrement `++` and `--`
 - Ternary operator `?:`
 - `sizeof` (type-aware, multi-dimensional array aware)
-- Typecasts to `int`, `unsigned`, `char`, `const`, `register`, `void`
+- Typecasts to `int`, `unsigned`, `char`, `const`, `register`, `void` — see **Cast semantics** below
+- `(unsigned char)` and `(signed char)` compound casts are **not** supported; use `& 0xFF` to isolate the low byte as unsigned
 - Function pointers and indirect calls
 - `if`/`else`, `while`, `do`/`while`, `for`, `switch`/`case`/`default`
 - `break`, `continue`, `return`, `goto` with labels
@@ -244,7 +245,62 @@ The expression evaluator directly drives code emission. There is no
 
 ---
 
-## The calling convention
+## Cast semantics
+
+Casts are handled in the `case ORB:` branch of `get_value()` in `compile.c`.
+When a typecast keyword (`int`, `unsigned`, `char`, `const`, `register`, `void`)
+follows `(`, the cast target type is assembled via `get_type()`, the operand is
+evaluated recursively, and then two decisions are made:
+
+**Does the cast require a code-generation action?** The condition is:
+
+```c
+if( ((tt1 & (REGISTER|CONSTANT)) != (tt & (REGISTER|CONSTANT)))
+||  (((tt1 & (BYTE|POINTER)) == BYTE) != ((tt & (BYTE|POINTER)) == BYTE)))
+```
+
+If neither the register/constant class nor the byte/word width changes,
+the cast is a pure type annotation — no code is emitted, the type bits
+are just replaced. This handles `(int)int_var`, `(unsigned)unsigned_var`,
+and similar no-change casts.
+
+**Narrowing (int → char):** When the cast target is `BYTE` and the source
+is not, `narrow_byte()` is called. This sets the `last_byte` flag in `6809cg.c`
+without emitting any instruction — B already holds the low 8 bits of D from the
+preceding `LDD`. The subsequent `expand(tt)` call then emits `SEX` (signed
+narrowing) or `CLRA` (unsigned narrowing, not reachable via supported casts)
+to produce the correct 16-bit result.
+
+**Widening (char → int):** When the source is `BYTE` and the target is not,
+`expand()` is called. The type passed to `expand()` is the cast target type
+augmented with the source's `UNSIGNED` bit:
+
+```c
+expand(tt | ((source_is_byte && target_is_word) ? (tt1 & UNSIGNED) : 0));
+```
+
+Without this, `(int)unsigned_char_var` would emit `SEX` because the cast
+target `int` carries no `UNSIGNED` bit — the source type's qualifier would
+be silently discarded. With it, `expand()` sees `UNSIGNED` and emits `CLRA`
+instead, correctly zero-extending.
+
+**Supported casts and their effects:**
+
+| Cast | Source type | Action |
+|------|-------------|--------|
+| `(char)int_expr` | int/unsigned (16-bit) in register | `narrow_byte()` → `expand()` → `SEX`; B already has low 8 bits |
+| `(int)char_var` | `char` (signed, 8-bit from memory) | `LDB` sets `last_byte`; `expand()` → `SEX` |
+| `(int)unsigned_char_var` | `unsigned char` (8-bit from memory) | `LDB` sets `last_byte`; `expand()` with `UNSIGNED` → `CLRA` |
+| `(unsigned)int_expr` | any | Type bits replaced; `UNSIGNED` set; no instruction |
+| `(int)int_expr` | any | Type bits replaced; no instruction unless byte→word widening |
+| `(unsigned char)x` | any | **Not supported** — compile error |
+
+`(const)`, `(register)`, and `(void)` casts are accepted syntactically and
+update the type bits but never emit instructions.
+
+---
+
+
 
 Arguments are pushed right-to-left onto the hardware stack (`S`). The
 called function sees them at positive offsets from `S`. The function
@@ -326,6 +382,26 @@ distinction between byte and word operands automatically.
 One special case worth noting: `* 2` is recognised at code generation time
 and replaced with `LSLB` / `ROLA` (arithmetic left shift) rather than a
 multiply call.
+
+### The `last_byte` / `expand()` / `narrow_byte()` mechanism
+
+The 6809 accumulator is 16-bit (D = A:B). 8-bit values are loaded into B
+with `LDB`, leaving A undefined. Before any 16-bit operation the accumulator
+must be widened to a valid 16-bit value. This is tracked via the global
+`last_byte` flag in `6809cg.c`:
+
+- `accval(_LOAD, ...)` sets `last_byte = -1` when it emits `LDB` (8-bit load).
+- `expand(type)` checks `last_byte`: if set, emits `SEX` (signed, B→D) or
+  `CLRA` (unsigned, zero-extend) depending on the `UNSIGNED` bit in `type`,
+  then clears `last_byte`.
+- Most operations call `expand()` before emitting their instruction, so the
+  accumulator is always 16-bit clean before arithmetic.
+
+`narrow_byte()` is the complement: it **sets** `last_byte` without emitting
+any instruction. It is used by the cast handler when `(char)` is applied to
+an already-in-register 16-bit value. The low 8 bits are already in B (since
+D = A:B and any preceding `LDD` put them there); calling `narrow_byte()` then
+`expand()` produces the correct sign-extension without a redundant load.
 
 `switch` uses a **table dispatch**. The compiler emits `LDU #?table` followed
 by `JMP ?switch`. The table itself (a sequence of `FDB value, FDB label` pairs,

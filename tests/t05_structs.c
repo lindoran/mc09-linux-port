@@ -4,8 +4,9 @@
  * FINDINGS:
  *   struct assignment (s2 = s1) — NOT supported: "Non-assignable".
  *     Workaround: pointer-based field copy.
- *   unsigned char members — sign-extend when read as int via (int)member.
- *     Workaround: mask with & 0xFF after cast.
+ *   unsigned char members — zero-extend correctly when read via (int)member.
+ *     (Fix 2: UNSIGNED bit now preserved through the (int) cast; expand()
+ *      emits CLRA instead of SEX.  No & 0xFF mask needed.)
  *   union with array member — "Inconsistent member type/offset".
  *     Workaround: use scalar members only.
  *   union byte member on 6809 (big-endian): a char member at offset 0
@@ -85,13 +86,13 @@ main()
     EXPECT_EQ("pval-orig-x", p1.x, 1)
     EXPECT_EQ("pval-orig-y", p1.y, 2)
 
-    /* array of structs — unsigned char members sign-extend; mask with & 0xFF */
+    /* array of structs — unsigned char members zero-extend correctly (Fix 2) */
     px[0].r = 255; px[0].g = 0;   px[0].b = 0;
     px[1].r = 0;   px[1].g = 200; px[1].b = 0;
     px[2].r = 0;   px[2].g = 0;   px[2].b = 128;
-    EXPECT_EQ("arr-px0-r", (int)px[0].r & 0xFF, 255)
-    EXPECT_EQ("arr-px1-g", (int)px[1].g & 0xFF, 200)
-    EXPECT_EQ("arr-px2-b", (int)px[2].b & 0xFF, 128)
+    EXPECT_EQ("arr-px0-r", (int)px[0].r, 255)
+    EXPECT_EQ("arr-px1-g", (int)px[1].g, 200)
+    EXPECT_EQ("arr-px2-b", (int)px[2].b, 128)
 
     /* sizeof */
     sz = sizeof(struct Point); EXPECT_EQ("sizeof-pt", sz, 4)
