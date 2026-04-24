@@ -490,6 +490,14 @@ through a `char` variable. Added `narrow_byte()` to `6809cg.c`; the cast
 handler in `compile.c` calls it when narrowing int→char, causing `expand()`
 to emit `SEX` or `CLRA` correctly.
 
+**`*(p+n)` and `*(p-n)` now scale correctly** — the binary `+` and `-`
+operators in the expression evaluator now scale the integer operand by
+`sizeof(*ptr)` when one operand is a non-char pointer. Previously only
+the subscript operator `p[n]` and the increment/decrement operators
+`++p`/`--p` scaled correctly; `*(p+n)` added raw bytes. Both constant
+and variable integer offsets are handled. `char*` arithmetic is
+unaffected (stride 1, no scaling needed).
+
 **`(int)` of `unsigned char` now zero-extends** — reading an `unsigned char`
 struct member or global via `(int)` now emits `CLRA` (zero-extend) rather
 than `SEX` (sign-extend). The `UNSIGNED` bit from the source type is

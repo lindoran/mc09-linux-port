@@ -2239,7 +2239,7 @@ do_binary(oper)
 	unsigned oper;
 {
 	unsigned token, value, type, token1, value1, type1;
-	unsigned atoken, avalue, atype, temp, ctype;
+	unsigned atoken, avalue, atype, temp, ctype, pstride;
 	int v, v1;
 	char flag, uflag, oflag, swap, order;
 
@@ -2436,8 +2436,50 @@ do_binary(oper)
 
 			if(type1 & SYMTYPE)
 				type_error();
+
+			/* Pointer arithmetic scaling: scale the integer operand by
+			 * sizeof(*ptr) when one operand is a non-char pointer and the
+			 * other is an integer.  Fixes *(p+n) and *(p-n) which previously
+			 * added/subtracted raw bytes instead of element-sized strides.
+			 *
+			 * The subscript operator p[n] is not affected (it already scales
+			 * correctly via the stride token in the index handler).
+			 *
+			 * pstride = sizeof(*ptr):
+			 *   long* -> 4, char* -> 1, any other pointer -> 2           */
+			if(flag == _ADD || flag == _SUB) {
+				if((type & POINTER) && !(type1 & POINTER)) {
+					/* Normal: ptr in token (loaded), int in token1 (accval) */
+					pstride = (type & LONG_TYPE) ? 4 :
+					          ((((type-1) & (POINTER|BYTE)) != BYTE) + 1);
+					if(pstride > 1) {
+						if(token1 == NUMBER)
+							value1 *= pstride;		/* constant: scale now */
+						else {
+							/* Variable int: load, scale, (negate for SUB), add ptr */
+							load(ctype, token1, value1, type1);
+							accval(_MULT, ctype, NUMBER, pstride, 0);
+							if(flag == _SUB)
+								accop(_NEG, ctype);
+							accval(_ADD, ctype, token, value, type);
+							goto pscale_done; } }
+				} else if(!(type & POINTER) && (type1 & POINTER)) {
+					/* Swapped: int in token (may be IN_ACC), ptr in token1 */
+					pstride = (type1 & LONG_TYPE) ? 4 :
+					          ((((type1-1) & (POINTER|BYTE)) != BYTE) + 1);
+					if(pstride > 1) {
+						if(token == NUMBER)
+							value *= pstride;		/* constant: scale now */
+						else {
+							/* Variable int in ACC/memory: scale, add ptr */
+							load(ctype, token, value, type);
+							accval(_MULT, ctype, NUMBER, pstride, 0);
+							accval(_ADD, ctype, token1, value1, type1);
+							goto pscale_done; } } } }
+
 			load(ctype, token, value, type);	/* insure its loaded */
-			accval(flag, ctype, token1, value1, type1); }
+			accval(flag, ctype, token1, value1, type1);
+			pscale_done: ; }
 
 	/* perform any pending assignment */
 		if(atoken)

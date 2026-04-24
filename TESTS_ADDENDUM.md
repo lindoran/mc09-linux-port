@@ -22,6 +22,7 @@ C patterns that previously failed.
 | **`mcp` `#undef`** | Allowed `#undef` of undefined macros to be a no-op (C standard compliant). | `mcp.c` |
 | **`&struct_var`** | Fixed compiler rejection of taking the address of a struct variable. | `compile.c` |
 | **Comment Scanning** | Fixed infinite loops/crashes with multi-line comments spanning file boundaries. | `compile.c` |
+| **`*(p+n)` no scaling** | `*(p+n)` and `*(p-n)` now scale the integer offset by `sizeof(*ptr)`. Both constant and variable offsets fixed. `LSLB/ROLA` emitted for ×2 variable case. | `compile.c` |
 | **`(char)` cast no-op** | `(int)(char)expr` now correctly truncates and sign-extends in-register values. Added `narrow_byte()` to set `last_byte` without re-emitting a load. | `6809cg.c`, `compile.c` |
 | **`unsigned char` sign-extends** | `(int)unsigned_char_member` now zero-extends (`CLRA`) instead of sign-extending (`SEX`). Source `UNSIGNED` bit preserved through the cast widening path. | `compile.c` |
 
@@ -31,7 +32,7 @@ C patterns that previously failed.
 
 ```sh
 cd tests/
-./run_tests.sh          # all 15 suites
+./run_tests.sh          # all 16 suites
 ./run_tests.sh t06      # one suite by prefix
 ```
 
@@ -80,23 +81,38 @@ not-found; `0` makes it return silently.
 
 ---
 
-## Compiler limitation: `*(p+n)` does not scale for non-char pointers
+## Bug fix: `*(p+n)` and `*(p-n)` now scale correctly for non-char pointers
 
-**Affects:** `int *p; *(p+n)` — adds `n` bytes, not `n * sizeof(int)`.
+**Fixed in:** `compile.c` (`do_binary()` — pointer arithmetic scaling block).
 
-**What works:** `p[n]` subscript syntax scales correctly. `++p`, `--p`,
-`p++`, `p--` also scale correctly.
+**Was broken:** `int *p; *(p+1)` added 1 byte to the pointer address instead
+of `1 * sizeof(int) = 2` bytes.  All six broken forms are now correct:
+- `*(p+n)` constant offset
+- `*(p+vn)` variable offset
+- `*(p-n)` constant subtraction
+- `*(p-vn)` variable subtraction
+- `*(up+n)` unsigned pointer
+- Compound assignment `p += n`, `p -= n`
 
-**Example:**
+**What was always correct:** `p[n]` subscript, `++p`, `p++`, `--p`, `p--`.
+
+**Fix:** In `do_binary()`, after the operand swap logic but before `load()`/
+`accval()`, the integer operand is scaled by `sizeof(*ptr)`:
+- Constant integer: `value *= pstride` at compile time → `ADDD #2` not `#1`
+- Variable integer: `LDD vn / LSLB / ROLA / ADDD p` — loads int, left-shifts
+  (×2), adds pointer (commutative)
+- Variable subtraction: same but negates the scaled int before adding pointer
+
+**After fix — all these work:**
 ```c
 int arr[4]; int *p; p = arr;
-*(p+1)   /* WRONG: reads arr[0] high byte + arr[1] low byte — garbage */
-p[1]     /* correct: reads arr[1] */
+*(p+1)   /* 512  — correct, previously read 2 bytes into arr[0] */
+*(p+2)   /* 1024 — correct, previously read arr[1] */
+*(p+vn)  /* correct for any variable vn */
+*(p-1)   /* correct */
 ```
 
-**Fix in tests:** All random-access index operations on `int*` use `p[n]`.
-Linear walks use `++` / `--`. Reverse-in-place uses index variables instead
-of two pointer variables being decremented toward each other.
+**t15_ptrscale.c** exercises all six broken forms and passes 18/18.
 
 ---
 
@@ -314,6 +330,8 @@ FUNCGOTO-typed value to a plain integer storage location.
 | `t13_malloc.c` | malloc, free, overlap check, free+realloc, coalescing | 19 |
 | `t14_stdlib.c` | abs, max, min, sqrt, memset, memcpy, atoi, toupper, tolower | 39 |
 | `t14b_ctype.c` | isalpha, isdigit, isspace, isupper, islower, isalnum, ispunct, iscntrl | 31 |
+| `t15_ptrscale.c` | `*(p+n)` / `*(p-n)` scaling: constant, variable, SUB, unsigned*, contrast vs p[n] and char* | 18 |
+| **Total** | | **394** |
 ---
 
 ## See Also

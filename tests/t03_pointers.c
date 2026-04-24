@@ -1,12 +1,14 @@
 /*
  * t03_pointers.c — pointer and array tests
  *
- * POINTER ARITHMETIC FINDINGS:
+ * POINTER ARITHMETIC:
  *   p[n]   — subscript: correctly scales by sizeof(*p)
  *   p++    — post-increment: correctly scales by sizeof(*p)
  *   --p    — pre-decrement: correctly scales by sizeof(*p)
- *   p + n  — does NOT scale for int* (adds n bytes, not n*2)
- *   Use subscript indexing p[n] for random access; use ++ and -- to walk.
+ *   p + n  — correctly scales by sizeof(*p) (fixed; see t15_ptrscale.c)
+ *   p - n  — correctly scales by sizeof(*p) (fixed; see t15_ptrscale.c)
+ *
+ * Detailed *(p+n) / *(p-n) coverage is in t15_ptrscale.c.
  */
 #include "testutil.h"
 

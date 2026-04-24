@@ -149,7 +149,9 @@ Everything you would expect from K&R C for embedded use:
 
 - `int`, `unsigned`, `char`, `void`
 - `static`, `extern`, `const`, `register`
-- Pointers and pointer arithmetic (up to 7 levels of indirection)
+- Pointers and pointer arithmetic (up to 7 levels of indirection); `*(p+n)`,
+  `*(p-n)`, `p += n`, `p -= n` all scale by `sizeof(*ptr)` — see **Pointer
+  arithmetic scaling** below
 - Arrays (multi-dimensional, with `sizeof` aware of all dimensions)
 - `struct` and `union` (full member access with `.` and `->`)
 - All arithmetic operators: `+`, `-`, `*`, `/`, `%`
@@ -245,7 +247,77 @@ The expression evaluator directly drives code emission. There is no
 
 ---
 
-## Cast semantics
+## Pointer arithmetic scaling
+
+When an integer is added to or subtracted from a pointer, the integer must be
+multiplied by `sizeof(*ptr)` — the size of the element the pointer addresses.
+This is called the **stride**. Without it, `p + 1` on an `int *` would advance
+by 1 byte instead of 2.
+
+### What was always correct
+
+- **Subscript `p[n]`**: the index handler builds a stride token from the
+  declared element type and multiplies the index by it before calling
+  `do_binary(STAR)` then `do_binary(ADD)`.
+- **`++p`, `p++`, `--p`, `p--`**: the increment/decrement path in the
+  expression evaluator applies the stride directly.
+
+### What was broken (now fixed)
+
+The binary `+` and `-` operators in `do_binary()` previously did not scale.
+`ADDD #n` was emitted where `ADDD #(n*stride)` was needed.
+
+### The fix (`compile.c` — `do_binary()`)
+
+After the operand swap logic and before the `load()`/`accval()` calls, a
+scaling block runs whenever `flag == _ADD || flag == _SUB` and exactly one
+operand has the `POINTER` type bit set.
+
+The element stride is computed from the pointer type `ptype`:
+
+```c
+pstride = (ptype & LONG_TYPE) ? 4 :
+          ((((ptype-1) & (POINTER|BYTE)) != BYTE) + 1);
+```
+
+`ptype-1` reduces the pointer indirection level by one, exposing the element
+type. The formula then checks whether the element is a byte (`BYTE` set, no
+`POINTER`) → stride 1; or a word/pointer (`BYTE` not set, or `POINTER` still
+set) → stride 2; or a long (`LONG_TYPE`) → stride 4.
+
+If `pstride == 1` (char pointer), no action is taken — the byte stride means
+the existing unscaled add is already correct.
+
+If `pstride > 1`, two cases:
+
+**Constant integer offset** (`token1 == NUMBER`): the value is scaled at
+compile time — `value1 *= pstride`. The normal `load()`/`accval()` path then
+emits `ADDD #(n*pstride)` directly. No extra instructions.
+
+**Variable integer offset**: the integer is loaded into D first, scaled with
+`accval(_MULT, ..., NUMBER, pstride, 0)` — which emits `LSLB / ROLA` for ×2
+or `LSLB / ROLA / LSLB / ROLA` for ×4 — and then the pointer is added with
+`accval(_ADD, ..., ptr)`. Since addition is commutative, `int*2 + ptr == ptr
++ int*2`. For subtraction (`p - vn`), the scaled integer is negated with
+`accop(_NEG, ...)` (which emits `COMA / COMB / ADDD #1`) before the add.
+
+### Pointer-to-pointer subtraction
+
+`ptr1 - ptr2` is still supported and yields the raw byte difference, as it
+always did. The `(type & POINTER) && (type1 & POINTER)` guard at the bottom
+of `do_binary()` sets `ctype = 0` (plain int result) for this case, and the
+scaling block is skipped because both operands have POINTER set.
+
+### What is still not supported
+
+- Arithmetic between a pointer and a `long` integer — the type system does
+  not route long operands through the normal ADD path.
+- Pointer comparison with a non-zero integer literal — use `p != (int *)0`
+  rather than `p != 1`.
+
+---
+
+
 
 Casts are handled in the `case ORB:` branch of `get_value()` in `compile.c`.
 When a typecast keyword (`int`, `unsigned`, `char`, `const`, `register`, `void`)
