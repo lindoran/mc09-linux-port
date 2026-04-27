@@ -60,6 +60,7 @@ main(argc, argv)
 {
 	int cmd, cmdc, i, j;
 	char *cmdv[30], filename[65];
+	int opt;
 
 	cmdc = 0;
 	optr = "EXTINDEX";
@@ -92,17 +93,19 @@ main(argc, argv)
 	/* Process any local commands */
 	for(cmd=0; cmd < cmdc; ++cmd) {
 		optr = cmdv[cmd];
-		switch((toupper(*optr++)<<8)|toupper(*optr++)) {
-			case 'A=' :		/* Add library file */
+		opt = (toupper(optr[0]) << 8) | toupper(optr[1]);
+		optr += 2;
+		switch(opt) {
+			case ('A' << 8) | '=' :	/* Add library file */
 				add_file(LIBFUN);
 				break;
-			case 'M=' :		/* New MIDDLE file */
+			case ('M' << 8) | '=' :	/* New MIDDLE file */
 				add_file(MIDDLE);
 				break;
-			case 'P=' :		/* New PREFIX file */
+			case ('P' << 8) | '=' :	/* New PREFIX file */
 				add_file(PREFIX);
 				break;
-			case 'R=' :		/* Remove a file */
+			case ('R' << 8) | '=' :	/* Remove a file */
 				if((i = j = find_name(PREFIX, LIBFUN, -1)) >= 0) {
 					do
 						stype[j] |= 0xF0;
@@ -110,10 +113,10 @@ main(argc, argv)
 					if(verbose) printf("Removing '%s'.\n", snames[i]);
 					changed = -1; }
 				break;
-			case 'S=' :		/* New SUFFIX file */
+			case ('S' << 8) | '=' :	/* New SUFFIX file */
 				add_file(SUFFIX);
 				break;
-			case '?=' :		/* Information request */
+			case ('?' << 8) | '=' :	/* Information request */
 				if((i = find_name(PREFIX, LIBFUN, -1)) >= 0)
 					display_file(i);
 				break;
@@ -404,10 +407,11 @@ test_externals(title)
 			ptr = snames[i];
 			for(j=0; j < stop; ++j)
 				if((stype[j] == DEFINED) && !strcmp(ptr, snames[j]))
-					goto extok;
-			dshow(i);
-			++count;
-			extok: } }
+					;
+				else {
+					dshow(i);
+					++count;
+				} } }
 	dend();
 
 	return count;

@@ -141,6 +141,7 @@ main(argc, argv)
 {
 	int i;
 	char *ptr;
+	int opt;
 
 	input_fp = output_fp = 0;	/* Default to stdio */
 	define_ptr = define_pool;	/* Set up macro pool base */
@@ -150,23 +151,25 @@ main(argc, argv)
 /* first process any filenames and command line options */
 	for(i=1; i < argc; ++i) {
 		input_ptr = ptr = argv[i];
-		switch((*ptr++ << 8) | *ptr++) {
-			case ('-'<<8)+'c' :				/* Keep comments */
+		opt = (ptr[0] << 8) | ptr[1];
+		ptr += 2;
+		switch(opt) {
+			case ('-'<<8)|'c' :				/* Keep comments */
 				comment = -1;
 				break;
-			case ('-'<<8)+'d' :				/* Warn duplicates */
+			case ('-'<<8)|'d' :				/* Warn duplicates */
 				dupwarn = -1;
 				break;
-			case ('-'<<8)+'q' :				/* Quiet mode */
+			case ('-'<<8)|'q' :				/* Quiet mode */
 				quiet = -1;
 				break;
-			case ('-'<<8)+'l' :				/* Output line numbers */
+			case ('-'<<8)|'l' :				/* Output line numbers */
 				linum = -1;
 				break;
-			case ('l'<<8)+'=' :				/* Specify library (l=path) */
+			case ('l'<<8)|'=' :				/* Specify library (l=path) */
 				library = ptr;
 				break;
-			case ('-'<<8)+'I' :				/* Include path (-Ipath or -I path) */
+			case ('-'<<8)|'I' :				/* Include path (-Ipath or -I path) */
 				if(*ptr)
 					library = ptr;
 				else if(i+1 < argc)

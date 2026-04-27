@@ -184,6 +184,7 @@ main(argc, argv)
 {
 	int i, j;
 	unsigned char *ptr;
+	int opt;
 #ifdef OPT_LEVEL
 	unsigned char flag;
 #endif
@@ -191,15 +192,17 @@ main(argc, argv)
 	/* first process any filenames and command line options */
 	for(i=1; i < argc; ++i) {
 		ptr = argv[i];
-		switch((*ptr++ << 8) | *ptr++) {
-			case ('-'<<8)+'d' :			/* Debug output */
+		opt = (ptr[0] << 8) | ptr[1];
+		ptr += 2;
+		switch(opt) {
+			case ('-'<<8)|'d' :			/* Debug output */
 				debug = -1;
 				break;
-			case ('-'<<8)+'q' :			/* Quiet mode */
+			case ('-'<<8)|'q' :			/* Quiet mode */
 				quiet = -1;
 				break;
 #ifdef OPT_LEVEL
-			case ('o'<<8)+'=' :			/* Optimization level */
+			case ('o'<<8)|'=' :			/* Optimization level */
 				if((opt_level = atoi(ptr)) > OPT_LEVEL)
 					abort("Bad o= value\n");
 				break;

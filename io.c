@@ -63,41 +63,44 @@ main(argc, argv)
 {
 	int i;
 	char *ptr;
+	int opt;
 
 /* first process any filenames and command line options */
 	for(i=1; i < argc; ++i) {
 		ptr = argv[i];
-		switch((*ptr++ << 8) + *ptr++) {
-			case ('-'<<8)+'c' :		/* Include comments */
+		opt = (ptr[0] << 8) | ptr[1];
+		ptr += 2;
+		switch(opt) {
+			case ('-'<<8)|'c' :		/* Include comments */
 				comment = -1;
 				break;
-			case ('-'<<8)+'f' :		/* Fold literal strings */
+			case ('-'<<8)|'f' :		/* Fold literal strings */
 				fold = -1;
 				break;
-			case ('-'<<8)+'l' :		/* Accept line numbers */
+			case ('-'<<8)|'l' :		/* Accept line numbers */
 				line = -1;
 				break;
-			case ('-'<<8)+'q' :		/* Quiet mode */
+			case ('-'<<8)|'q' :		/* Quiet mode */
 				quiet = -1;
 				break;
-			case ('-'<<8)+'s' :		/* Symbolic output */
+			case ('-'<<8)|'s' :		/* Symbolic output */
 				symbolic = -1;
 				break;
-			case ('-'<<8)+'W' :		/* Suppress unreferenced warnings */
+			case ('-'<<8)|'W' :		/* Suppress unreferenced warnings */
 				nowarn = -1;
 				break;
-			case ('-'<<8)+'e' :		/* Max errors (-eN) */
+			case ('-'<<8)|'e' :		/* Max errors (-eN) */
 				if(*ptr)
 					max_errors = atoi(ptr);
 				break;
-			case ('-'<<8)+'I' :		/* Include path (-Ipath or -I path) */
+			case ('-'<<8)|'I' :		/* Include path (-Ipath or -I path) */
 				if(*ptr)
 					strncpy(include_path, ptr, sizeof(include_path)-1);
 				else if(i+1 < argc)
 					strncpy(include_path, argv[++i], sizeof(include_path)-1);
 				break;
 #ifdef MODEL
-			case ('m'<<8)+'=' :		/* memory model to use */
+			case ('m'<<8)|'=' :		/* memory model to use */
 				model = *ptr - '0';
 				break;
 #endif
