@@ -15,6 +15,28 @@ The script generates target_dir/lib09/ containing:
   *.ASM          copied from base lib09/ (invariant runtime modules)
   EXTINDEX.LIB   copied from base lib09/
 
+Optional BSS clear feature (required for any ROM target where RAM is not
+pre-zeroed at reset — i.e. real hardware like the CoCo):
+
+  BSS_CLEAR  SET  1   * clear RAM from RAM_ORG to STACK_TOP-1 before main()
+
+When set, generate_rlp() emits a loop that zeroes the entire user RAM
+region. This is required because C mandates that uninitialised globals
+are zero, but real hardware RAM contains arbitrary values at power-on.
+usim09 starts with zeroed memory so does not need this.
+
+Optional test buffer feature (for drivers that use a linear RAM output
+buffer polled by an external monitor, e.g. coco_test + MAME Lua):
+
+  TESTBUF_WRIDX  SET  $0FFE   * 16-bit big-endian write pointer address
+  TESTBUF_BASE   SET  $1000   * buffer base address (stored into WRIDX)
+
+When both are non-zero, generate_rlp() emits a BSS clear loop that
+zeroes RAM from RAM_ORG to TESTBUF_WRIDX-1, then initialises WRIDX
+to TESTBUF_BASE. TESTBUF implies BSS_CLEAR — both are active together.
+This replaces the manual post-mktarget edits that were previously
+needed for the coco_test target.
+
 See targets/usim09/usim09.cfg for a fully-commented reference config.
 """
 
@@ -28,20 +50,29 @@ RUNTIME    = os.path.join(DRV_DIR, '_runtime.asm')
 
 # ── config defaults ────────────────────────────────────────────────────────
 DEFAULTS = {
-    'CODE_ORG':    0x2000,
-    'STACK_TOP':   0x8000,
-    'RAM_ORG':     0x0100,  # RAM base for uninitialised globals (6809RLM.ASM ORG)
-    'ROM_TARGET':  0,
-    'VECTOR_ORG':  0xFFF0,
-    'EXIT_MODE':   0,       # 0=spin, 1=jump EXIT_ADDR, 2=SWI
-    'EXIT_ADDR':   0xE082,
-    'IO_DRIVER':   'mc6850',
-    'UART_BASE':   0xC000,
-    'UART_STATUS': 0,
-    'UART_DATA':   1,
-    'UART_TXRDY':  0x02,
-    'UART_RXRDY':  0x01,
-    'UART_CRLF':   1,
+    'CODE_ORG':      0x2000,
+    'STACK_TOP':     0x8000,
+    'RAM_ORG':       0x0100,  # RAM base for uninitialised globals (6809RLM.ASM ORG)
+    'ROM_TARGET':    0,
+    'VECTOR_ORG':    0xFFF0,
+    'EXIT_MODE':     0,       # 0=spin, 1=jump EXIT_ADDR, 2=SWI
+    'EXIT_ADDR':     0xE082,
+    'IO_DRIVER':     'mc6850',
+    'UART_BASE':     0xC000,
+    'UART_STATUS':   0,
+    'UART_DATA':     1,
+    'UART_TXRDY':    0x02,
+    'UART_RXRDY':    0x01,
+    'UART_CRLF':     1,
+    # BSS clear — zero RAM from RAM_ORG to STACK_TOP before main().
+    # Required on real hardware (CoCo RAM is not zeroed at reset).
+    # usim09 starts with zeroed RAM so does not need this.
+    # TESTBUF implies BSS_CLEAR automatically.
+    'BSS_CLEAR':     0,
+    # Test buffer feature — both must be non-zero to activate.
+    # When active, startup clears BSS and initialises the write pointer.
+    'TESTBUF_WRIDX': 0,       # address of 16-bit big-endian write pointer
+    'TESTBUF_BASE':  0,       # buffer base address (initial value of WRIDX)
 }
 
 # ── config parser ──────────────────────────────────────────────────────────
@@ -114,6 +145,50 @@ def generate_rlp(cfg):
     else:
         exit_stub = '?exit1\tBRA\t?exit1\n'
 
+    # BSS clear and test buffer init.
+    #
+    # Two cases:
+    #   BSS_CLEAR=1, TESTBUF not set:
+    #     Clear RAM from RAM_ORG to STACK_TOP (exclusive). Used by the
+    #     regular coco target where we want zeroed globals but no test buffer.
+    #
+    #   TESTBUF_WRIDX and TESTBUF_BASE both non-zero (implies BSS_CLEAR):
+    #     Clear RAM from RAM_ORG to TESTBUF_WRIDX (exclusive), then init
+    #     the 16-bit write pointer. Used by coco_test target.
+    wridx = cfg['TESTBUF_WRIDX']
+    base  = cfg['TESTBUF_BASE']
+    if wridx and base:
+        # TESTBUF mode: clear up to WRIDX, then init write pointer
+        ram_org  = hex4(cfg['RAM_ORG'])
+        s_wridx  = hex4(wridx)
+        s_base   = hex4(base)
+        testbuf_init = (
+            f'* Clear BSS: zero RAM from RAM_ORG to TESTBUF_WRIDX\n'
+            f'\tLDX\t#{ram_org}\t\tStart of globals\n'
+            f'\tLDD\t#0\n'
+            f'?clr1\tSTD\t,X++\n'
+            f'\tCMPX\t#{s_wridx}\t\tStop before test buffer write index\n'
+            f'\tBLO\t?clr1\n'
+            f'* Init test output buffer write pointer\n'
+            f'\tLDX\t#{s_base}\t\tBuffer base address\n'
+            f'\tSTX\t{s_wridx}\t\tStore into WRIDX\n'
+        )
+    elif cfg['BSS_CLEAR']:
+        # BSS_CLEAR only: clear full user RAM region
+        ram_org   = hex4(cfg['RAM_ORG'])
+        stack_top = hex4(cfg['STACK_TOP'])
+        testbuf_init = (
+            f'* Clear BSS: zero RAM from RAM_ORG to STACK_TOP\n'
+            f'* Required on real hardware - RAM is not zeroed at reset\n'
+            f'\tLDX\t#{ram_org}\t\tStart of globals\n'
+            f'\tLDD\t#0\n'
+            f'?clr1\tSTD\t,X++\n'
+            f'\tCMPX\t#{stack_top}\t\tStop at stack top\n'
+            f'\tBLO\t?clr1\n'
+        )
+    else:
+        testbuf_init = ''
+
     with open(RUNTIME) as f:
         runtime = f.read()
 
@@ -126,6 +201,7 @@ def generate_rlp(cfg):
         f'\n'
         f'* Startup - entered via reset vector\n'
         f'?begin\tLDS\t#{stack_top}\t\tInitialise stack\n'
+        f'{testbuf_init}'
         f'\tCLR\t?heap\t\t\tZero heap pointer\n'
         f'\tJSR\tmain\t\t\tCall user program\n'
         f'\n'
@@ -242,7 +318,11 @@ def main():
     if cfg['EXIT_MODE'] == 1:
         print(f"  EXIT_ADDR   = {hex4(cfg['EXIT_ADDR'])}")
     print(f"  RAM_ORG     = {hex4(cfg['RAM_ORG'])}")
+    print(f"  BSS_CLEAR   = {cfg['BSS_CLEAR']}")
     print(f"  IO_DRIVER   = {cfg['IO_DRIVER']}")
+    if cfg['TESTBUF_WRIDX'] and cfg['TESTBUF_BASE']:
+        print(f"  TESTBUF_WRIDX = {hex4(cfg['TESTBUF_WRIDX'])}  (test buffer write index)")
+        print(f"  TESTBUF_BASE  = {hex4(cfg['TESTBUF_BASE'])}  (test buffer base)")
 
     print(f"\nmktarget: generating {lib09_out}/")
     os.makedirs(lib09_out, exist_ok=True)

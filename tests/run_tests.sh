@@ -58,7 +58,7 @@ for f in $FILES; do
     fi
 
     # Run
-    out=$(echo "" | timeout 5 "$USIM" "$hex" 2>/dev/null | tr -d '\r')
+    out=$(echo "" | timeout 1 "$USIM" "$hex" 2>/dev/null | tr -d '\r')
     suite=$(echo "$out" | grep "^SUITE:" | tail -1)
     p=$(echo "$out" | grep ":OK$" 2>/dev/null | wc -l | tr -d " ")
     fails=$(echo "$out" | grep ":FAIL" 2>/dev/null || true)

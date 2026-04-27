@@ -3,9 +3,174 @@
 [← Back to README](README.md)
 
 This document records findings discovered while building and running the test
-suite against the usim09 target. Each finding describes a deviation from
-standard C behaviour, a compiler limitation, or a bug in the original or ported
-toolchain, along with the workaround used in the tests.
+suite against the usim09 and coco2b targets. Each finding describes a deviation
+from standard C behaviour, a compiler limitation, or a bug in the original or
+ported toolchain, along with the workaround used in the tests.
+
+---
+
+## Running the tests
+
+### usim09 simulator
+
+```sh
+make test             # all suites
+make test TEST=t06    # one suite by prefix
+```
+
+Requires `make` to have been run in the root directory and `usim09` to be on
+PATH or present in the root directory.
+
+### MAME coco2b emulator
+
+```sh
+make test-coco             # all suites
+make test-coco TEST=t06    # one suite by prefix
+```
+
+Alternatively, run the shell script directly:
+
+```sh
+sh tests/run_tests_coco.sh
+sh tests/run_tests_coco.sh t06
+```
+
+**Requirements:**
+- `mame` on PATH with coco2b ROMs: `mame -verifyroms coco2b` must report clean
+- `objcopy` on PATH (binutils)
+- `python3` on PATH (3.6+)
+- MAME built with Lua scripting enabled
+
+---
+
+## MAME coco2b test target
+
+### Overview
+
+The `coco_test` target compiles test programs as CoCo cartridge ROMs and runs
+them headlessly under MAME's `coco2b` emulation. A Lua monitor script polls a
+linear output buffer in emulated RAM and writes the test output to a host file.
+MAME exits automatically when `SUITE:PASS` or `SUITE:FAIL` is seen.
+
+This gives coverage on top of usim09 because:
+- The CoCo BASIC ROM environment is real — CHROUT, POLCAT, memory layout
+- RAM is not pre-zeroed; the startup must clear BSS explicitly
+- The 6809 vector table must be correct for the cartridge to autostart
+
+### Memory layout
+
+```
+$0000-$05FF  BASIC workspace (do not use)
+$0600-$0FFD  User globals — BSS, cleared by startup before main()
+$0FFE-$0FFF  TESTBUF_WRIDX: 16-bit big-endian output buffer write pointer
+$1000-$7EFF  Linear output buffer (~28KB) — polled by MAME Lua monitor
+$7F00        Stack top (stack grows downward from here)
+$A000-$BFFF  BASIC ROM ($A000=POLCAT vector, $A002=CHROUT vector)
+$C000-$C002  CoCo autostart preamble ($55, $C0, $03)
+$C003-$DFEF  Cartridge code (CODE_ORG=$C003)
+$DFF0-$DFFF  6809 hardware vector table (all vectors -> $C003)
+$E000-$FFFF  Extended BASIC ROM
+```
+
+### Autostart preamble
+
+The CoCo Extended BASIC checks for `$55` at `$C000` on boot. If found, it
+does a `JSR` to the address in `$C001-$C002`. The test runner's Python snippet
+patches the first three bytes of the binary after `objcopy` conversion:
+
+```
+$C000 = $55   magic byte
+$C001 = $C0   execution address high byte  \
+$C002 = $03   execution address low byte    -> JSR $C003 = ?begin
+```
+
+Because `CODE_ORG=$C003` in `coco_test.cfg`, `objcopy` leaves bytes 0–2 as
+`$FF` gap fill. The Python script prepends three bytes to align the binary to
+`$C000` before patching, so the startup code at `$C003` is untouched.
+
+### BSS clear and buffer initialisation
+
+Standard C requires uninitialized globals to be zero. The CoCo BASIC
+environment leaves arbitrary values in RAM. The `coco_test` target uses the
+`TESTBUF_WRIDX` and `TESTBUF_BASE` config keys to instruct `mktarget` to emit
+a BSS clear loop and write-pointer initialisation in `6809RLP.ASM` before
+`main()` is called:
+
+```asm
+?begin  LDS     #$7F00          Initialise stack
+* Clear BSS: zero RAM from RAM_ORG to TESTBUF_WRIDX
+        LDX     #$0600          Start of globals
+        LDD     #0
+?clr1   STD     ,X++
+        CMPX    #$0FFE          Stop before test buffer write index
+        BLO     ?clr1
+* Init test output buffer write pointer
+        LDX     #$1000          Buffer base address
+        STX     $0FFE           Store into WRIDX
+        CLR     ?heap           Zero heap pointer
+        JSR     main            Call user program
+```
+
+This is generated entirely by `mktarget` — no manual post-generation edits
+are needed. Running `make clean && make` always produces a correct target.
+
+### coco_test I/O driver
+
+The `drivers/coco_test.asm` driver writes characters to a linear RAM buffer
+only — no screen output — to avoid register corruption from the CoCo BASIC
+CHROUT routine. The inner write loop:
+
+```asm
+_wrchr  PSHS    A,X             * save only what we use
+        LDX     WRIDX           * current write address
+        CMPX    #$7EFF          * buffer full?
+        BHI     ?wdone
+        STA     ,X+             * store char, advance pointer
+        STX     WRIDX           * save updated pointer
+?wdone  PULS    A,X
+        RTS
+```
+
+**Note on CHROUT register clobbering:** Early driver versions passed characters
+through BASIC CHROUT for screen output. CHROUT trashes the `U` register, which
+mc09 uses as the frame pointer for functions with local variables. Removing
+CHROUT entirely (buffer-only) resolved all mid-suite crashes without needing
+to save and restore the full register set.
+
+### MAME Lua monitor
+
+`tests/coco_monitor.lua` is loaded via `-autoboot_script`. It runs as a
+periodic callback and drains the buffer by comparing the host-side read
+position against `WRIDX`:
+
+```lua
+local WRIDX_HI = 0x0FFE
+local WRIDX_LO = 0x0FFF
+local BUFBASE  = 0x1000
+```
+
+When `SUITE:PASS` or `SUITE:FAIL` appears in the accumulated output,
+`manager.machine:exit()` is called. MAME also has a `-seconds_to_run` safety
+limit to catch hangs.
+
+### mktarget extension: TESTBUF config keys
+
+Two new optional config keys were added to `mktarget` to support the test
+buffer pattern without requiring manual post-generation edits:
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `TESTBUF_WRIDX` | `0` (disabled) | Address of the 16-bit big-endian write pointer |
+| `TESTBUF_BASE`  | `0` (disabled) | Buffer base address (initial value stored into WRIDX) |
+
+When both are non-zero, `generate_rlp()` emits the BSS clear loop and WRIDX
+init into `6809RLP.ASM`. When either is zero the startup is unchanged, so
+existing targets (`coco`, `usim09`) are unaffected.
+
+This is the intended pattern for adding any new startup-time hardware
+initialisation: add a config key, handle it in `generate_rlp()` or
+`generate_rls()`, and document it in the target's `.cfg` file. Do not
+hand-edit generated `lib09/` files.
 
 ---
 
@@ -16,7 +181,7 @@ validation process. These fixes ensure the compiler behaves correctly for standa
 C patterns that previously failed.
 
 | Fix | Impact | File(s) |
-|-----|--------|---------|
+|-----|--------|---------| 
 | **`typedef` Side-Channel** | Resolved "Non-assignable" errors on globals following struct pointer typedefs. | `compile.c` |
 | **ROM Global Writable** | Updated `mktarget` to place globals in RAM (`$0100`) for usim09/CoCo targets. | `mktarget`, `targets/*.cfg` |
 | **`mcp` `#undef`** | Allowed `#undef` of undefined macros to be a no-op (C standard compliant). | `mcp.c` |
@@ -25,20 +190,6 @@ C patterns that previously failed.
 | **`*(p+n)` no scaling** | `*(p+n)` and `*(p-n)` now scale the integer offset by `sizeof(*ptr)`. Both constant and variable offsets fixed. `LSLB/ROLA` emitted for ×2 variable case. | `compile.c` |
 | **`(char)` cast no-op** | `(int)(char)expr` now correctly truncates and sign-extends in-register values. Added `narrow_byte()` to set `last_byte` without re-emitting a load. | `6809cg.c`, `compile.c` |
 | **`unsigned char` sign-extends** | `(int)unsigned_char_member` now zero-extends (`CLRA`) instead of sign-extending (`SEX`). Source `UNSIGNED` bit preserved through the cast widening path. | `compile.c` |
-
----
-
-## Running the tests
-
-```sh
-cd tests/
-./run_tests.sh          # all 16 suites
-./run_tests.sh t06      # one suite by prefix
-```
-
-Requires `make` to have been run in the root directory and `usim09` to be on
-PATH or present in the root directory. Each test file is compiled with
-`cc09 -PIq` (preprocessor + Intel HEX + quiet) then run under usim09.
 
 ---
 
@@ -286,6 +437,29 @@ overflow this space, producing assembler "out of range" branch errors.
 
 ---
 
+## Output buffer constraint on coco_test target
+
+The coco_test target uses a linear RAM output buffer from `$1000` to `$7EFF`
+(~28KB). Test suites that produce extensive output (long test names, many
+`FAIL` detail lines, or large pass counts rendered as decimal strings) can
+fill this buffer before `SUITE:PASS` is written, causing the Lua monitor to
+time out.
+
+**Fix:** Split `t14b_ctype.c` into three files so each suite's output fits
+comfortably within the buffer:
+
+| File | Coverage |
+|------|----------|
+| `t14b_ctype.c` | isdigit, isalpha, isspace, isupper |
+| `t14c_ctype.c` | islower, isalnum |
+| `t14d_ctype.c` | isprint, ispunct |
+
+**General rule:** If a test suite times out on the coco_test target but passes
+on usim09, check whether its output is approaching the buffer limit by
+inspecting `/tmp/mc09_coco_out.txt` after a run. Split the suite if needed.
+
+---
+
 ## Function pointer storage limitation
 
 Storing a function address in an `int` or `unsigned` variable causes "Type
@@ -313,25 +487,34 @@ FUNCGOTO-typed value to a plain integer storage location.
 
 ## Test file quick reference
 
-| File | Coverage | Tests |
-|------|----------|-------|
-| `t01_controlflow.c` | if/else, while, for, do/while, break, continue, nested loops | 18 |
-| `t02_switch.c` | switch/case/default, fall-through, char switch, switch-in-loop | 19 |
-| `t03_pointers.c` | indexing, arithmetic, dereference, address-of, 2D arrays, sizeof | 22 |
-| `t04_strings.c` | strlen, strcpy, strcat, strcmp (with inversion note), strchr | 26 |
-| `t05_structs.c` | dot, arrow, nested, pass-by-value, array-of-structs, union, sizeof | 25 |
-| `t06_bitwise.c` | &, \|, ^, ~, <<, >>, compound assigns, bit manip, popcount | 37 |
-| `t07_casting.c` | (char) inline narrowing (Fix 1), unsigned char struct members (Fix 2), storage path, unsigned reinterpret, sign extension | 33 |
-| `t08_funcptr.c` | switch dispatch, asm-indirect JSR,X, function address in asm | 17 |
-| `t09_printf.c` | sprintf %d %u %x %s %c, field width, left-justify, zero-fill | 24 |
-| `t10_preproc.c` | #define, parameterised macros, ##, #if, #ifdef, #undef, __LINE__ | 23 |
-| `t11_static.c` | static locals (persist), static globals, const, accumulation | 19 |
-| `t12_typedef.c` | typedef scalar/struct, uint8_t/int8_t zero/sign-extend (Fix 2), long, stdint.h, stdbool.h, longcmp | 24 |
-| `t13_malloc.c` | malloc, free, overlap check, free+realloc, coalescing | 19 |
-| `t14_stdlib.c` | abs, max, min, sqrt, memset, memcpy, atoi, toupper, tolower | 39 |
-| `t14b_ctype.c` | isalpha, isdigit, isspace, isupper, islower, isalnum, ispunct, iscntrl | 31 |
-| `t15_ptrscale.c` | `*(p+n)` / `*(p-n)` scaling: constant, variable, SUB, unsigned*, contrast vs p[n] and char* | 18 |
-| **Total** | | **394** |
+| File | Coverage | usim09 | coco2b |
+|------|----------|--------|--------|
+| `t01_controlflow.c` | if/else, while, for, do/while, break, continue, nested loops | 18 | 18 |
+| `t02_switch.c` | switch/case/default, fall-through, char switch, switch-in-loop | 19 | 19 |
+| `t03_pointers.c` | indexing, arithmetic, dereference, address-of, 2D arrays, sizeof | 22 | 22 |
+| `t04_strings.c` | strlen, strcpy, strcat, strcmp (with inversion note), strchr | 26 | 26 |
+| `t05_structs.c` | dot, arrow, nested, pass-by-value, array-of-structs, union, sizeof | 25 | 25 |
+| `t06_bitwise.c` | &, \|, ^, ~, <<, >>, compound assigns, bit manip, popcount | 37 | 37 |
+| `t07_casting.c` | (char) inline narrowing, unsigned char struct members, storage path | 33 | 33 |
+| `t08_funcptr.c` | switch dispatch, asm-indirect JSR,X, function address in asm | 17 | 17 |
+| `t09_printf.c` | sprintf %d %u %x %s %c, field width, left-justify, zero-fill | 24 | 24 |
+| `t10_preproc.c` | #define, parameterised macros, ##, #if, #ifdef, #undef, __LINE__ | 23 | 23 |
+| `t11_static.c` | static locals (persist), static globals, const, accumulation | 19 | 19 |
+| `t12_typedef.c` | typedef scalar/struct, uint8_t/int8_t, long, stdint.h, stdbool.h | 24 | 24 |
+| `t13_malloc.c` | malloc, free, overlap check, free+realloc, coalescing | 19 | 19 |
+| `t14_stdlib.c` | abs, max, min, sqrt, memset, memcpy, atoi, toupper, tolower | 39 | 39 |
+| `t14b_ctype.c` | isdigit, isalpha, isspace, isupper | 16 | 16 |
+| `t14c_ctype.c` | islower, isalnum *(coco2b only — usim09 uses original t14b)* | — | 8 |
+| `t14d_ctype.c` | isprint, ispunct *(coco2b only — usim09 uses original t14b)* | — | 7 |
+| `t15_ptrscale.c` | `*(p+n)` / `*(p-n)` scaling: constant, variable, SUB, unsigned* | 18 | 18 |
+| **Total** | | **394** | **394** |
+
+> **Note on t14b/t14c/t14d split:** The original `t14b_ctype.c` (31 tests,
+> all ctype functions) runs under usim09 without issue. For the coco2b target
+> it was split across three files to stay within the output buffer limit. The
+> usim09 runner uses the original `t14b_ctype.c`; the coco2b runner uses the
+> three split files. Total test count is 394 on both targets.
+
 ---
 
 ## See Also

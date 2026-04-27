@@ -13,6 +13,7 @@ Released as freeware. See `COPY.TXT` in the original archives for licence terms.
 - [**Compiler Internals**](COMPILER.md) — architecture, type system, and code generation
 - [**Standard Library**](STDLIB.md) — runtime routines, serial I/O, and string/math functions
 - [**Test Suite Addendum**](TESTS_ADDENDUM.md) — compiler quirks, bugs, and target-specific findings
+- [**Example code**](/examples/README.md) — compiler test programs under popular emulation.
 - [**Original Manuals**](mc-docs/) — the original Dunfield documentation for Micro-C and XASM09
 
 ---
