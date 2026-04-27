@@ -35,13 +35,8 @@ PREFIX    ?= /usr/local
 USIM09    ?= $(shell which usim09 2>/dev/null || echo ./usim09)
 
 CC        = gcc
-CFLAGS    = -std=gnu89 \
-            -Wno-implicit-int \
-            -Wno-implicit-function-declaration \
-            -Wno-pointer-sign \
-            -Wno-return-type \
-            -Wno-unused-function \
-            -I.
+CFLAGS    = -g -std=c99 -pedantic -Wall -Wextra -I.
+LDFLAGS   = -g
 
 # Test filter — empty runs all suites; set to a prefix to run one:
 #   make test TEST=t06
