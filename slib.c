@@ -93,8 +93,8 @@ main(argc, argv)
 	/* Process any local commands */
 	for(cmd=0; cmd < cmdc; ++cmd) {
 		optr = cmdv[cmd];
-		opt = (toupper(ptr[0]) << 8) | toupper(ptr[1]);
-		ptr += 2;
+		opt = (toupper(optr[0]) << 8) | toupper(optr[1]);
+		optr += 2;
 		switch(opt) {
 			case 'A=' :		/* Add library file */
 				add_file(LIBFUN);
