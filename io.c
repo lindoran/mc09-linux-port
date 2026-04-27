@@ -63,11 +63,14 @@ main(argc, argv)
 {
 	int i;
 	char *ptr;
+	int opt;
 
 /* first process any filenames and command line options */
 	for(i=1; i < argc; ++i) {
 		ptr = argv[i];
-		switch((*ptr++ << 8) + *ptr++) {
+		opt = (ptr[0] << 8) | ptr[1];
+		ptr += 2;
+		switch(opt) {
 			case ('-'<<8)+'c' :		/* Include comments */
 				comment = -1;
 				break;

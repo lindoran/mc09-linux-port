@@ -62,10 +62,13 @@ main(argc, argv)
 	int i;
 	char c, *ptr;
 	FILE *fp;
+	int opt;
 
 	for(i=1; i < argc; ++i) {
 		ptr = argv[i];
-		switch((*ptr++ << 8) | *ptr++) {
+		opt = (ptr[0] << 8) | ptr[1];
+		ptr += 2;
+		switch(opt) {
 			case ('k'<<8)|'=' :		/* Single name to KEEP */
 				keep[kcount++] = add_pool(ptr);
 				break;

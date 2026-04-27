@@ -184,6 +184,7 @@ main(argc, argv)
 {
 	int i, j;
 	unsigned char *ptr;
+	int opt;
 #ifdef OPT_LEVEL
 	unsigned char flag;
 #endif
@@ -191,7 +192,9 @@ main(argc, argv)
 	/* first process any filenames and command line options */
 	for(i=1; i < argc; ++i) {
 		ptr = argv[i];
-		switch((*ptr++ << 8) | *ptr++) {
+		opt = (ptr[0] << 8) | ptr[1];
+		ptr += 2;
+		switch(opt) {
 			case ('-'<<8)+'d' :			/* Debug output */
 				debug = -1;
 				break;

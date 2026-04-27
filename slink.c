@@ -182,11 +182,14 @@ main(argc, argv)
 	int i;
 	unsigned s;
 	char *ptr;
+	int opt;
 
 /* first process any filenames and command line options */
 	for(i=1; i < argc; ++i) {
 		ptr = argv[i];
-		switch((toupper(*ptr++) << 8) | toupper(*ptr++)) {
+		opt = (toupper(ptr[0]) << 8) | toupper(ptr[1]);
+		ptr += 2;
+		switch(opt) {
 			case ('-'<<8)|'C' :			/* Eliminate comments */
 				comkeep = 0;
 				break;

@@ -60,6 +60,7 @@ main(argc, argv)
 {
 	int cmd, cmdc, i, j;
 	char *cmdv[30], filename[65];
+	int opt;
 
 	cmdc = 0;
 	optr = "EXTINDEX";
@@ -92,7 +93,9 @@ main(argc, argv)
 	/* Process any local commands */
 	for(cmd=0; cmd < cmdc; ++cmd) {
 		optr = cmdv[cmd];
-		switch((toupper(*optr++)<<8)|toupper(*optr++)) {
+		opt = (toupper(ptr[0]) << 8) | toupper(ptr[1]);
+		ptr += 2;
+		switch(opt) {
 			case 'A=' :		/* Add library file */
 				add_file(LIBFUN);
 				break;

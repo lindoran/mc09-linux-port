@@ -141,6 +141,7 @@ main(argc, argv)
 {
 	int i;
 	char *ptr;
+	int opt;
 
 	input_fp = output_fp = 0;	/* Default to stdio */
 	define_ptr = define_pool;	/* Set up macro pool base */
@@ -150,7 +151,9 @@ main(argc, argv)
 /* first process any filenames and command line options */
 	for(i=1; i < argc; ++i) {
 		input_ptr = ptr = argv[i];
-		switch((*ptr++ << 8) | *ptr++) {
+		opt = (ptr[0] << 8) | ptr[1];
+		ptr += 2;
+		switch(opt) {
 			case ('-'<<8)+'c' :				/* Keep comments */
 				comment = -1;
 				break;
