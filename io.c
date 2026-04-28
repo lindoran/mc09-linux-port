@@ -23,6 +23,12 @@
 #ifndef LINE_SIZE
 #include "compile.h"
 
+extern char *copy_string(char *dest,char *source);
+extern void  severe_error(char *string);
+extern void  put_str(char *ptr,unsigned int file);
+extern void  compile(void);
+extern void  put_chr(char chr,char file);
+
 /* Variables in the COMPILE.C module */
 extern char line, comment, fold;	/* Command line switch flags */
 extern char file_name[];			/* Filename table */
@@ -57,9 +63,7 @@ char hello[] = { "DDS MICRO-C " STRINGIFY(CPU) " Compiler\n\
 /*
  * Initialize I/O & execute compiler
  */
-main(argc, argv)
-	int argc;
-	char *argv[];
+int main(int argc, char *argv[])
 {
 	int i;
 	char *ptr;
@@ -130,8 +134,7 @@ main(argc, argv)
 /*
  * Terminate the compiler
  */
-terminate(rc)
-	int rc;
+void terminate(int rc)
 {
 	if(output_fp)
 		fclose(output_fp);
@@ -141,9 +144,7 @@ terminate(rc)
 /*
  * Write a number to file
  */
-put_num(value, file)
-	unsigned value;
-	unsigned file;
+void put_num(unsigned int value, unsigned int file)
 {
 	char stack[12];		/* 10 digits covers UINT32_MAX; 12 for safety */
 	register unsigned i;
@@ -161,9 +162,7 @@ put_num(value, file)
  * Write a string to device indicated by "file"
  * (0 = console, non-0 = output file)
  */
-put_str(ptr, file)
-	char *ptr;
-	unsigned file;
+void put_str(char *ptr, unsigned int file)
 {
 	while(*ptr)
 		put_chr(*ptr++, file);
@@ -179,8 +178,7 @@ put_str(ptr, file)
 /*
  * Stack previous input file & open a new one
  */
-f_open(name)
-	char *name;
+int f_open(char *name)
 {
 	FILE *fp;
 	char clean[FILE_SIZE+1], fullpath[FILE_SIZE*2+2];
@@ -194,14 +192,14 @@ f_open(name)
 	*p = 0;
 
 	/* Try working directory first */
-	if (fp = fopen(clean, "r")) {
+	if ((fp = fopen(clean, "r"))) {
 		fp_table[file_depth+1] = fp;
 		return -1; }
 
 	/* Try -I path */
 	if (include_path[0]) {
 		snprintf(fullpath, sizeof(fullpath), "%s/%s", include_path, clean);
-		if (fp = fopen(fullpath, "r")) {
+		if ((fp = fopen(fullpath, "r"))) {
 			fp_table[file_depth+1] = fp;
 			return -1; } }
 
@@ -209,7 +207,7 @@ f_open(name)
 	{ char *env = getenv("MCINCLUDE");
 	  if (env) {
 		snprintf(fullpath, sizeof(fullpath), "%s/%s", env, clean);
-		if (fp = fopen(fullpath, "r")) {
+		if ((fp = fopen(fullpath, "r"))) {
 			fp_table[file_depth+1] = fp;
 			return -1; } } }
 
@@ -219,7 +217,7 @@ f_open(name)
 /*
  * Close input file & return to last one
  */
-f_close()
+void f_close(void)
 {
 	fclose(fp_table[file_depth]);
 }
@@ -227,8 +225,7 @@ f_close()
 /*
  * Read a line from the source file, return 1 if end of file,
  */
-get_lin(line)
-	char *line;
+char get_lin(char *line)
 {
 	register int chr, i;
 
@@ -250,9 +247,7 @@ get_lin(line)
  * Write character to device indicated by "file"
  * (0 = console, non-0 = output file)
  */
-put_chr(chr, file)
-	char chr;
-	char file;
+void put_chr(char chr, char file)
 {
 	putc(chr, file ? output_fp : stderr);
 }

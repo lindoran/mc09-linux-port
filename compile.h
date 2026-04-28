@@ -5,6 +5,8 @@
  * **See COPY.TXT**.
  */
 
+#include <stdbool.h>
+
 #define FALSE		0
 #define TRUE		1
 
@@ -135,3 +137,79 @@
 #define _ULE		19			/* Unsigned LE */
 #define _UGT		20			/* Unsigned GT */
 #define _UGE		21			/* Unsigned GE */
+
+extern char *copy_string(char *dest, char *source);
+extern bool equal_string(char const *str1, char const *str2);
+extern bool is_num(char chr);
+extern bool is_symbol(char chr);
+extern bool is_skip(char chr);
+extern void compile(void);
+extern void inline_asm(void);
+extern void statement(unsigned int token);
+extern void check_loop(unsigned int stack[]);
+extern unsigned int check_switch(void);
+extern void test_jump(unsigned int label);
+extern bool test_exit(void);
+extern void cond_jump(unsigned int term, unsigned int cond, unsigned int label);
+extern char *match(char *ptr);
+extern char *add_pool(char *string);
+extern char *lookup_macro(void);
+extern char *parse(void);
+extern void unget_token(unsigned int token);
+extern bool test_next(unsigned int token);
+extern unsigned int get_token(void);
+extern unsigned int get_number(unsigned int base, unsigned int digits);
+extern void skip_comment(void);
+extern int read_special(char delim);
+extern int read_char(void);
+extern void read_line(void);
+extern void test_if(int flag);
+extern void skip_cond(void);
+extern void expect(unsigned int token);
+extern void expect_symbol(void);
+extern void get_smname(unsigned int type);
+extern void undef_error(void);
+extern void symbol_error(char *msg);
+extern void symbol_error_warn(char *msg);
+extern void text_error(char *msg, char *txt);
+extern void syntax_error(void);
+extern void index_error(void);
+extern void type_error(void);
+extern void pointer_error(void);
+extern void check_void(unsigned int type);
+extern void line_error(char *message);
+extern void line_warning(char *message);
+extern void severe_error(char *string);
+extern unsigned int get_type(unsigned int token, unsigned int type);
+extern void define_typedef(void);
+extern void declare(unsigned int token, unsigned int type);
+extern unsigned int define_structure(void);
+extern void define_var(unsigned int type, unsigned int ssize);
+extern void define_func(unsigned int type);
+extern bool declare_arg(void);
+extern void define_symbol(unsigned int type, unsigned int dim_index);
+extern void test_redefine(unsigned int type, unsigned int dim_index, char *message);
+extern unsigned int lookup_local(void);
+extern unsigned int lookup_global(void);
+extern unsigned int lookup(void);
+extern void special_name(void);
+extern void check_type(unsigned int type);
+extern void check_func(void);
+extern unsigned int size_of_var(unsigned int index);
+extern unsigned int get_constant(unsigned int *value);
+extern void evaluate(unsigned int term, int xpend);
+extern void sub_eval(unsigned int term);
+extern unsigned int do_oper(unsigned int token);
+extern void push(unsigned int token, unsigned int value, unsigned int type);
+extern void pop(unsigned int *token, unsigned int *value, unsigned int *type);
+extern void get_value(void);
+extern void load_index(unsigned int t, unsigned int v, unsigned int tt);
+extern void do_unary(unsigned int oper);
+extern void do_binary(unsigned int oper);
+extern unsigned int combine(unsigned int type1, unsigned int type2);
+extern unsigned int partial_stack(unsigned int token);
+extern void stack_register(char rflags);
+extern void do_pending(void);
+extern bool test_not(void);
+extern void load(unsigned int atype, unsigned int token, unsigned int value, unsigned int type);
+extern void store(unsigned int atype, unsigned int token, unsigned int value, unsigned int type);

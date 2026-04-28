@@ -10,10 +10,23 @@
  ** Notes concerning portability are identified by **
  */
 
+#include <stdbool.h>
+#include <string.h>
+
 #ifndef LINE_SIZE	/* if stand alone, include headers */
 #include "compile.h"
 #include "tokens.h"
+#include "compile.h"
+#include "6809cg.h"
 #endif
+
+extern char get_lin(char *);
+extern void f_close(void);
+extern void terminate(int);
+extern int f_open(char *);
+extern void put_chr(char,char);
+extern void put_str(char *,unsigned int);
+extern void put_num(unsigned int,unsigned int);
 
 /*
  * Tokens recognized by the parser:
@@ -91,10 +104,9 @@ unsigned max_errors = MAX_ERRORS;	/* Max errors before abort (overridden by -eN)
 /*
  * Copy a string - Return pointer to zero terminator
  */
-char *copy_string(dest, source)
-	char *dest, *source;
+char *copy_string(char *dest, char *source)
 {
-	while(*dest = *source) {
+	while((*dest = *source)) {
 		++dest;
 		++source; }
 	return dest;
@@ -103,21 +115,15 @@ char *copy_string(dest, source)
 /*
  * Test two strings for equality
  */
-equal_string(str1, str2)
-	char *str1, *str2;
+bool equal_string(char const *str1, char const *str2)
 {
-	do {
-		if(*str1 != *str2++)
-		return 0; }
-	while(*str1++);
-	return -1;
+  return strcmp(str1,str2) == 0;
 }
 
 /*
  * Determine if a character is an numeric digit
  */
-is_num(chr)
-	char chr;
+bool is_num(char chr)
 {
 	return (chr >= '0') && (chr <= '9');
 }
@@ -125,8 +131,7 @@ is_num(chr)
 /*
  * Determine if a character is a valid symbol character
  */
-is_symbol(chr)
-	char chr;
+bool is_symbol(char chr)
 {
 	return ((chr >= 'a') && (chr <= 'z'))
 		|| ((chr >= 'A') && (chr <= 'Z'))
@@ -136,8 +141,7 @@ is_symbol(chr)
 /*
  * Determine if a character is a "skip" character
  */
-is_skip(chr)
-	char chr;
+bool is_skip(char chr)
 {
 	return (chr == ' ') || (chr == '\t');
 }
@@ -147,7 +151,7 @@ is_skip(chr)
  */
 char in_comment = 0; /* non-zero while inside skip_comment() */
 
-compile()
+void compile(void)
 {
 	*(input_pos = input_line) = 0;
 	def_module();
@@ -158,7 +162,7 @@ compile()
 /*
  * Handle inline assembly language
  */
-inline_asm()
+void inline_asm(void)
 {
 	char c, f, *i;
 	f = fold;
@@ -183,8 +187,7 @@ inline_asm()
 /*
  * Process a language statement
  */
-statement(token)
-	unsigned token;
+void statement(unsigned int token)
 {
 	unsigned a, b, c, d;
 
@@ -370,8 +373,7 @@ statement(token)
 /*
  * Check that a loop is active & setup exit condition
  */
-check_loop(stack)
-	unsigned stack[];
+void check_loop(unsigned int stack[])
 {
 	expect(SEMI);
 	if(!(loop_ptr && (exit_flag = stack[loop_ptr-1])))
@@ -381,7 +383,7 @@ check_loop(stack)
 /*
  * Check that a switch is active & allocate label
  */
-check_switch()
+unsigned int check_switch(void)
 {
 	if(!sdefault)
 		line_error("No active switch");
@@ -394,11 +396,10 @@ check_switch()
  * statement ("return", "break", or "continue"). This prevents the
  * generation of an unaccessable jump following these statements.
  */
-test_jump(label)
-	unsigned label;
+void test_jump(unsigned int label)
 {
 	if(test_exit())
-		jump(label, -1);
+		jump(label,true);
 }
 
 /*
@@ -407,19 +408,18 @@ test_jump(label)
  * label. This prevents generation of a spurious jump when a
  * "return" statement is used at the end of a function.
  */
-test_exit()
+bool test_exit(void)
 {
 	if(exit_flag) {
-		jump(exit_flag, -1);
-		return(exit_flag = 0); }
-	return -1;
+		jump(exit_flag,true);
+		return(exit_flag = false); }
+	return true;
 }
 
 /*
  * Compile a conditional evaluation & jump
  */
-cond_jump(term, cond, label)
-	unsigned term, cond, label;
+void cond_jump(unsigned int term, unsigned int cond, unsigned int label)
 {
 	unsigned token, value, type;
 
@@ -440,8 +440,7 @@ cond_jump(term, cond, label)
 /*
  * Match a keyword from the input line
  */
-char *match(ptr)
-	char *ptr;
+char *match(char *ptr)
 {
 	char *ptr1;
 
@@ -462,8 +461,7 @@ char *match(ptr)
 /*
  * Add an entry to the define (macro) pool
  */
-char *add_pool(string)
-	char *string;
+char *add_pool(char *string)
 {
 	char *ptr;
 
@@ -479,13 +477,13 @@ char *add_pool(string)
 /*
  * Lookup macro in the macro definition table
  */
-char *lookup_macro()
+char *lookup_macro(void)
 {
 	unsigned i;
 	char *ptr;
 
 	for(i=0; i < define_top; ++i) {
-		if(ptr = match(define_index[i]))
+		if((ptr = match(define_index[i])))
 			return ptr; }
 	return 0;
 }
@@ -493,7 +491,7 @@ char *lookup_macro()
 /*
  * Parse off string from the input line
  */
-char *parse()
+char *parse(void)
 {
 	char *dptr;
 
@@ -510,8 +508,7 @@ char *parse()
 /*
  * Allow a single token to be returned to the input stream
  */
-unget_token(token)
-	unsigned token;
+void unget_token(unsigned int token)
 {
 	ungot_token = token + 1;
 }
@@ -520,15 +517,14 @@ unget_token(token)
  * Test the next token in the input stream, put it
  * back if its not the one we are looking for.
  */
-test_next(token)
-	unsigned token;
+bool test_next(unsigned int token)
 {
 	unsigned token1;
 
 	if((token1 = get_token()) == token)
-		return -1;
+		return true;
 	unget_token(token1);
-	return 0;
+	return false;
 }
 
 /*
@@ -536,7 +532,7 @@ test_next(token)
  * (indicating type). If it a special token type (NUMBER, STRING, SYMBOL),
  * global variables "gvalue" and "gsymbol" are set to appriopriate values.
  */
-get_token()
+unsigned int get_token(void)
 {
 	unsigned i, j;
 	char *ptr, *last_pos, chr;
@@ -564,7 +560,7 @@ test_token:	for(;;) {
 
 /* lookup token in token table */
 	last_pos = input_pos;				/* remember where we were */
-	for(i=0; ptr = tokens[i]; ++i) {	/* look through entire table */
+	for(i=0; (ptr = tokens[i]); ++i) {	/* look through entire table */
 		while((chr = *input_pos) && (*ptr == chr)) {
 			++ptr;
 			++input_pos; }
@@ -622,7 +618,7 @@ cs:		do {
 		return NUMBER; }
 
 	if(is_symbol(chr)) {					/* macro or symbol name */
-		if(ptr = lookup_macro()) {				/* macro name */
+		if((ptr = lookup_macro())) {				/* macro name */
 			if(define_depth >= DEF_DEPTH)
 				severe_error("Macro expansion to deep");
 			define_stack[define_depth++] = input_pos;
@@ -656,8 +652,7 @@ cs:		do {
  * Get a number in a number base for a maximum # of digits
  * (digits = 0 means no limit)
  */
-get_number(base, digits)
-	unsigned base, digits;
+unsigned int get_number(unsigned int base, unsigned int digits)
 {
 	unsigned value, c;
 
@@ -685,7 +680,7 @@ get_number(base, digits)
  ** 32 bit compiler users... you must insure that 'x' will only
  ** contain the last 2 characters read from the input file.
  */
-skip_comment()
+void skip_comment(void)
 {
 	unsigned short x;  /* 16-bit: sliding 2-char window; breaks on 32-bit int */
 	++in_comment;
@@ -702,8 +697,7 @@ skip_comment()
 /*
  * Read special character (with translations)
  */
-read_special(delim)
-	char delim;
+int read_special(char delim)
 {
 	int c;
 
@@ -745,7 +739,7 @@ read_special(delim)
 /*
  * Read a character from the input file
  */
-read_char()
+int read_char(void)
 {
 	char c;
 
@@ -763,7 +757,7 @@ read_char()
  * At end of file, backup through any "#includes", and at the top,
  * end compilation!
  */
-read_line()
+void read_line(void)
 {
 	unsigned i;
 
@@ -880,8 +874,7 @@ read_line()
 /*
  * Test #end/#else for validity
  */
-test_if(flag)
-	char flag;
+void test_if(int flag)
 {
 	if(if_flag < flag)
 		severe_error("Improper #else/#endif");
@@ -891,7 +884,7 @@ test_if(flag)
 /*
  * Skip to end of a conditional section
  */
-skip_cond()
+void skip_cond(void)
 {
 	do {
 		if(match("#else")) {
@@ -908,8 +901,7 @@ skip_cond()
  * Check for a certain token occuring next in the input stream.
  * If it is not found, report an error.
  */
-expect(token)
-	unsigned token;
+void expect(unsigned int token)
 {
 	if(!test_next(token))
 		text_error("Expected", tokens[token]);
@@ -918,7 +910,7 @@ expect(token)
 /*
  * Get a SYMBOL token & report error if not found
  */
-expect_symbol()
+void expect_symbol(void)
 {
 	if(!test_next(SYMBOL))
 		syntax_error();
@@ -927,8 +919,7 @@ expect_symbol()
 /*
  * Get structure/member name & check its type
  */
-get_smname(type)
-	unsigned type;
+void get_smname(unsigned int type)
 {
 	expect_symbol();
 	special_name();
@@ -941,7 +932,7 @@ get_smname(type)
 /*
  * Report an undefined symbol
  */
-undef_error()
+void undef_error(void)
 {
 	symbol_error("Undefined");
 }
@@ -951,8 +942,7 @@ undef_error()
  *
  ** See note at beginning of 'special_name' function.
  */
-symbol_error(msg)
-	char *msg;
+void symbol_error(char *msg)
 {
 	*gsymbol &= 0x7f;	/* Remove high bit in-case special name */
 	text_error(msg, gsymbol);
@@ -961,8 +951,7 @@ symbol_error(msg)
 /*
  * Report a warning involving a symbol name (non-fatal)
  */
-symbol_error_warn(msg)
-	char *msg;
+void symbol_error_warn(char *msg)
 {
 	char emsg[50];
 	*gsymbol &= 0x7f;
@@ -973,8 +962,7 @@ symbol_error_warn(msg)
 /*
  * Output an error message with quoted text
  */
-text_error(msg, txt)
-	char *msg, *txt;
+void text_error(char *msg, char *txt)
 {
 	char emsg[50];
 
@@ -985,7 +973,7 @@ text_error(msg, txt)
 /*
  * Report a general syntax error
  */
-syntax_error()
+void syntax_error(void)
 {
 	line_error("Syntax error");
 }
@@ -993,7 +981,7 @@ syntax_error()
 /*
  * Report an error in indirection
  */
-index_error()
+void index_error(void)
 {
 	line_error("Illegal indirection");
 }
@@ -1001,7 +989,7 @@ index_error()
 /*
  * Report incompatible types
  */
-type_error()
+void type_error(void)
 {
 	line_error("Type clash");
 }
@@ -1009,7 +997,7 @@ type_error()
 /*
  * Report illegal pointer operations
  */
-pointer_error()
+void pointer_error(void)
 {
 	line_error("Illegal pointer operation");
 }
@@ -1017,8 +1005,7 @@ pointer_error()
 /*
  * Report illegal void use
  */
-check_void(type)
-	unsigned type;
+void check_void(unsigned int type)
 {
 	if( (type & (TVOID|POINTER)) == TVOID)
 		type_error();
@@ -1027,8 +1014,7 @@ check_void(type)
 /*
  * Report a compile error
  */
-line_error(message)
-	char *message;
+void line_error(char *message)
 {
 	put_str(file_name[file_depth], 0);
 	put_chr(':', 0);
@@ -1044,8 +1030,7 @@ line_error(message)
 /*
  * Report a compile warning (non-fatal, does not increment error count)
  */
-line_warning(message)
-	char *message;
+void line_warning(char *message)
 {
 	put_str(file_name[file_depth], 0);
 	put_chr(':', 0);
@@ -1058,8 +1043,7 @@ line_warning(message)
 /*
  * Report a non-recoverable compile error
  */
-severe_error(string)
-	char *string;
+void severe_error(char *string)
 {
 	line_error(string);
 	put_str("Compilation aborted\n", 0);
@@ -1069,8 +1053,7 @@ severe_error(string)
 /*
  * Get a type declaration with all modifiers
  */
-get_type(token, type)
-	unsigned token, type;
+unsigned int get_type(unsigned int token, unsigned int type)
 {
 	for(;;) {
 		switch(token) {
@@ -1129,7 +1112,7 @@ get_type(token, type)
 /*
  * Process a typedef declaration
  */
-define_typedef()
+void define_typedef(void)
 {
 	unsigned type, ssize, lstack_save;
 	char is_struct;
@@ -1187,8 +1170,7 @@ define_typedef()
 /*
  * Declare a symbol (function or variable)
  */
-declare(token, type)
-	unsigned token, type;
+void declare(unsigned int token, unsigned int type)
 {
 	char union_save;
 	unsigned ssize, lstack_save;
@@ -1263,7 +1245,7 @@ declare(token, type)
  ** ALIGNMENT), replace the "return size;" statement at the end of
  ** this function with:  return (size + 1) & -2;
  */
-define_structure()
+unsigned int define_structure(void)
 {
 	unsigned token, size, save_offset;
 
@@ -1285,8 +1267,7 @@ define_structure()
 /*
  * Define a variable
  */
-define_var(type, ssize)
-	unsigned type, ssize;
+void define_var(unsigned int type, unsigned int ssize)
 {
 	unsigned token, value, index, size, i, j, k;
 	char iflag, nflag, fflag, temp[SYMBOL_SIZE+1];
@@ -1353,7 +1334,7 @@ define_var(type, ssize)
 		do {
 			if(ssize) {
 				if(test_next(CHAR)) {		/* Force 8-bit initialization */
-					do_comment(i = 0);
+					do_comment(""); // XXX do_comment(i = 0);
 					j = 1; }
 				else if(test_next(INT)) {	/* Force 16-bit initialization */
 					do_comment(0);
@@ -1390,7 +1371,7 @@ define_var(type, ssize)
 			line_error("Too many initializers");
 
 		if(i && (size & 1)) {		/* Align if necessary ... */
-			do_comment(i = 0);
+			do_comment(""); // XXX do_comment(i = 0);
 			j = 1; }
 		while(size > index) {		/* And fill uninitialized storage */
 			init_static(NUMBER, 0, i);
@@ -1405,8 +1386,7 @@ define_var(type, ssize)
 /*
  * Define a function
  */
-define_func(type)
-	unsigned type;
+void define_func(unsigned int type)
 {
 	unsigned token, dim_save;
 
@@ -1479,7 +1459,7 @@ define_func(type)
 /*
  * Test for an argument declaration & declare it if present
  */
-declare_arg()
+bool declare_arg(void)
 {
 	int token;
 	unsigned i;
@@ -1487,7 +1467,7 @@ declare_arg()
 		case VOID:
 			if(test_next(CRB)) {
 				unget_token(CRB);
-				return -1; }
+				return true; }
 		case INT:
 		case UNSIGN:
 		case CHAR:
@@ -1497,7 +1477,7 @@ declare_arg()
 		case STRUCT:
 		case UNION:
 			declare(token, ARGUMENT);
-			return -1; }
+			return true; }
 	/* Check if it's a typedef'd type used as a K&R argument declaration */
 	if(token == SYMBOL) {
 		for(i = 0; i < td_top; ++i) {
@@ -1506,14 +1486,13 @@ declare_arg()
 				declare(get_token(), ARGUMENT);
 				return -1; } } }
 	unget_token(token);
-	return 0;
+	return false;
 }
 
 /*
  * Enter a symbol in the symbol table with specified name & type
  */
-define_symbol(type, dim_index)
-	unsigned type, dim_index;
+void define_symbol(unsigned int type, unsigned int dim_index)
 {
 	unsigned index;
 
@@ -1529,7 +1508,7 @@ define_symbol(type, dim_index)
 			symbol_error("Not an argument"); }
 		index = (type & STATIC) ? function_count : local_stack; }
 	else {							/* outside of function, use global */
-		if(index = lookup_global()) {		/* symbol already exists */
+		if((index = lookup_global())) {		/* symbol already exists */
 			test_redefine(type, dim_index, "Duplicate global");
 			return; }
 		sptr = global_top++; }
@@ -1551,9 +1530,7 @@ found_index:
 /*
  * Test for valid redefinition of a symbol
  */
-test_redefine(type, dim_index, message)
-	unsigned type, dim_index;
-	char *message;
+void test_redefine(unsigned int type, unsigned int dim_index, char *message)
 {
 	unsigned i, rtype, rdim;
 
@@ -1596,7 +1573,7 @@ fail: symbol_error(message);
 /*
  * Locate a symbol in the local symbol table
  */
-lookup_local()
+unsigned int lookup_local(void)
 {
 	unsigned i;
 
@@ -1610,7 +1587,7 @@ lookup_local()
 /*
  * Locate a symbol in the global symbol table
  */
-lookup_global()
+unsigned int lookup_global(void)
 {
 	unsigned i;
 
@@ -1623,7 +1600,7 @@ lookup_global()
 /*
  * Locate a symbol in local or global symbol tables
  */
-lookup()
+unsigned int lookup(void)
 {
 	return lookup_local() || lookup_global();
 }
@@ -1637,7 +1614,7 @@ lookup()
  ** non-C character (like '$') to the symbol name, and remove the &=
  ** from the beginning of the 'symbol_error' function.
  */
-special_name()
+void special_name(void)
 {
 	*gsymbol |= 0x80;	/* Set high bit to indicate special name */
 }
@@ -1645,8 +1622,7 @@ special_name()
 /*
  * Check type of last symbol looked up.
  */
-check_type(type)
-	unsigned type;
+void check_type(unsigned int type)
 {
 	if((s_type[sptr] & SYMTYPE) != type)
 		symbol_error("Improper type of symbol");
@@ -1655,7 +1631,7 @@ check_type(type)
 /*
  * Check that we are within a function definition
  */
-check_func()
+void check_func(void)
 {
 	if(in_function) {
 		if(in_function < FUNC_CODE) {	/* first invocation */
@@ -1668,8 +1644,7 @@ check_func()
 /*
  * Calculate the size of a variable
  */
-size_of_var(index)
-	unsigned index;
+unsigned int size_of_var(unsigned int index)
 {
 	unsigned type, size, i;
 
@@ -1688,8 +1663,7 @@ size_of_var(index)
  * Get a constant value (NUMBER or STRING)
  * which can be evaluated at compile time.
  */
-get_constant(value)
-	unsigned *value;
+unsigned int get_constant(unsigned int *value)
 {
 	unsigned token, type;
 
@@ -1707,9 +1681,7 @@ get_constant(value)
  * Evaluate a full expression at the highest level, and
  * insure that the result is loaded into the accumulator.
  */
-evaluate(term, xpend)
-	unsigned term;
-	int xpend;
+void evaluate(unsigned int term, int xpend)
 {
 	unsigned token, value;
 
@@ -1726,8 +1698,7 @@ evaluate(term, xpend)
  * COMMA differs with the context of the expression, and can not
  * therefore be handled as a general operator.
  */
-sub_eval(term)
-	unsigned term;
+void sub_eval(unsigned int term)
 {
 	unsigned token;
 
@@ -1741,8 +1712,7 @@ sub_eval(term)
 /*
  * Perform an operation & all higher priority operations.
  */
-do_oper(token)
-	unsigned token;
+unsigned int do_oper(unsigned int token)
 {
 	unsigned token1, t, v, tt, tt1, exit_lab;
 
@@ -1794,8 +1764,7 @@ do_oper(token)
 /*
  * Push a value on the expression stack
  */
-push(token, value, type)
-	unsigned token, value, type;
+void push(unsigned int token, unsigned int value, unsigned int type)
 {
 	if(expr_ptr >= EXPR_DEPTH)
 		severe_error("Expression stack overflow");
@@ -1808,8 +1777,7 @@ push(token, value, type)
 /*
  * Pop a value from the expression stack
  */
-pop(token, value, type)
-	int *token, *value, *type;
+void pop(unsigned int *token, unsigned int *value, unsigned int *type)
 {
 	if(!expr_ptr)
 		severe_error("Expression stack underflow");
@@ -1823,7 +1791,7 @@ pop(token, value, type)
  * Gets the next token and perform any processing
  * required to evaluate it.
  */
-get_value()
+void get_value(void)
 {
 	int ndim;
 	unsigned token, t, v, tt, tt1, tt2, dptr;
@@ -2113,7 +2081,7 @@ get_value()
 			domember:
 				load_index(t, v, tt); }
 			get_smname(MEMBER);
-			if(tt1 = s_index[v = sptr]) {				/* Adjust offset */
+			if((tt1 = s_index[v = sptr])) {				/* Adjust offset */
 				load(0, NUMBER, tt1, 0);
 				accop(_IADD, 0); }
 			tt = ((tt & (CONSTANT|REGISTER)) | s_type[sptr]) & ~SYMTYPE;	/* Set new type */
@@ -2155,8 +2123,7 @@ get_value()
  * Load the index register with the address
  * needed to perform an indexing operation.
  */
-load_index(t, v, tt)
-	unsigned t, v, tt;
+void load_index(unsigned int t, unsigned int v, unsigned int tt)
 {
 	if((tt & ARGUMENT) || !(tt & ARRAY)) {	/* pointer or argument */
 		stack_register(STACK_IDX);
@@ -2170,8 +2137,7 @@ load_index(t, v, tt)
  * Evaluate a unary operation, if possible, evaluate constant expressions
  * into another constant. Produce code to perform operation if necessary.
  */
-do_unary(oper)
-	unsigned oper;
+void do_unary(unsigned int oper)
 {
 	unsigned token, value, type;
 	char flag;
@@ -2235,8 +2201,7 @@ do_unary(oper)
  * Evaluate a binnary operation, if possible, evaluate constant expressions
  * into another constant. Produce code to perform operation if necessary.
  */
-do_binary(oper)
-	unsigned oper;
+void do_binary(unsigned int oper)
 {
 	unsigned token, value, type, token1, value1, type1;
 	unsigned atoken, avalue, atype, temp, ctype, pstride;
@@ -2514,8 +2479,7 @@ do_binary(oper)
 /*
  * Combine two types (For binary operations)
  */
-combine(type1, type2)
-	unsigned type1, type2;
+unsigned int combine(unsigned int type1, unsigned int type2)
 {
 /* If one type is pointer and other is not, return same pointer type */
 	if(type1 & POINTER) {
@@ -2534,8 +2498,7 @@ combine(type1, type2)
 /*
  * Generate the correct token for partial stack operations
  */
-partial_stack(token)
-	unsigned token;
+unsigned int partial_stack(unsigned int token)
 {
 	return (token == ION_STACK) ? ISTACK_TOP : token;
 }
@@ -2544,13 +2507,12 @@ partial_stack(token)
  * Examine the expression stack & produce code to place any
  * value in the indicated registers on the processor stack.
  */
-stack_register(rflags)
-	char rflags;
+void stack_register(char rflags)
 {
-	int i, aflag;
+	int aflag;
 
 	aflag = -1;
-	for(i=0; i < expr_ptr; ++i) {
+	for(unsigned int i=0; i < expr_ptr; ++i) {
 		if(expr_token[i] == IN_ACC) {				/* Test accumulator */
 			if(rflags & STACK_ACC) {
 				do_pending();
@@ -2570,7 +2532,7 @@ stack_register(rflags)
 /*
  * Test for a pending operation, and perform it
  */
-do_pending()
+void do_pending(void)
 {
 	if(pend_opr) {
 		accop(pend_opr, pend_type);
@@ -2580,13 +2542,13 @@ do_pending()
 /*
  * Test for a NOT condition, required to invert a jump
  */
-test_not()
+bool test_not(void)
 {
 	if(pend_opr == _NOT) {
 		pend_opr = 0;
-		return TRUE; }
+		return true; }
 	do_pending();
-	return FALSE;
+	return false;
 }
 
 /*
@@ -2594,8 +2556,7 @@ test_not()
  * If a partial result is already in the accumulator, stack it
  * and load the new value.
  */
-load(atype, token, value, type)
-	unsigned atype, token, value, type;
+void load(unsigned int atype, unsigned int token, unsigned int value, unsigned int type)
 {
 
 	if(type & SYMTYPE)
@@ -2616,8 +2577,7 @@ load(atype, token, value, type)
 /*
  * Store accumulator value
  */
-store(atype, token, value, type)
-	unsigned atype, token, value, type;
+void store(unsigned int atype, unsigned int token, unsigned int value, unsigned int type)
 {
 	if((atype & LONG_TYPE) && !(atype & POINTER))
 		line_error("long: use longset/longcpy, not direct assignment");

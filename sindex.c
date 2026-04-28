@@ -16,17 +16,17 @@
 #include <string.h>
 #include <ctype.h>
 #include <glob.h>
+
 #include "microc.h"
+#include "portab.h"
 
 #define	LINESIZ		100		/* Maximum size of input line */
 #define	FILESIZ		12		/* Maximum size of file name */
 
-main(argc, argv)
-	int argc;
-	char *argv[];
+int main(int argc, char *argv[])
 {
 	int i;
-	char name[FILESIZ+1], buffer[LINESIZ+1], *ptr, *ptr1;
+	char buffer[LINESIZ+1], *ptr, *ptr1;
 	FILE *index_fp, *fp;
 	static char *pattern = "*.ASM", *index = "EXTINDEX.LIB";
 
@@ -39,17 +39,17 @@ main(argc, argv)
 		else pattern = _a; }
 
 	if(!argc)
-		abort("\nUse SINDEX [filespec i=index]\n");
+		die("\nUse SINDEX [filespec i=index]\n");
 
 	{ glob_t gl; int gi;
 	  if(glob(pattern, 0, 0, &gl) || !gl.gl_pathc) {
-		text_message("No files matching", pattern);
+	  	fprintf(stderr,"No files matching: %s\n",pattern);
 		exit(-1); }
 	  index_fp = fopen(index, "w");
 	  for(gi = 0; gi < (int)gl.gl_pathc; ++gi) {
 		char *gname = gl.gl_pathv[gi];
-		if(fp = fopen(gname, "r")) {
-			text_message("Processing", gname);
+		if((fp = fopen(gname, "r"))) {
+			fprintf(stderr,"Processing: %s\n",gname);
 			putc('-', index_fp);
 			fputs(gname, index_fp);
 			putc('\n', index_fp);
@@ -66,16 +66,4 @@ main(argc, argv)
 	  globfree(&gl); }
 
 	fclose(index_fp);
-}
-
-/*
- * Display an error message with text
- */
-text_message(message, text)
-	char *message, *text;
-{
-	fputs(message, stderr);
-	fputs(": '", stderr);
-	fputs(text, stderr);
-	fputs("'\n", stderr);
 }

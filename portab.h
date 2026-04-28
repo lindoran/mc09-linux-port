@@ -16,16 +16,16 @@
 
 /* Dunfield abort(msg) -> die(msg).  Macro avoids redefining ANSI abort(). */
 #define die(msg)   do { fputs((msg), stderr); exit(1); } while(0)
-#define abort(msg) die(msg)
+//#define abort(msg) die(msg)
 
 /* strupr() - not in POSIX */
 #ifndef _STRUPR_DEFINED
 #define _STRUPR_DEFINED
-static char *strupr(char *s) {
-    char *p = s;
-    while (*p) { *p = (char)toupper((unsigned char)*p); ++p; }
-    return s;
-}
+//static char *strupr(char *s) {
+//    char *p = s;
+//    while (*p) { *p = (char)toupper((unsigned char)*p); ++p; }
+//    return s;
+//}
 #endif
 
 #endif /* PORTAB_H */

@@ -13,11 +13,14 @@
  * Compile command: cc slib -fop
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+
 #include "microc.h"
+#include "portab.h"
 
 #define	SYMSIZE	15		/* Maximum length of a symbol name */
 #define	MAXSYM	2500	/* Maximum number of symbols */
@@ -31,8 +34,23 @@
 #define	DEFINED	6		/* Defined symbol */
 #define	EXTERN	7		/* External reference */
 
+static void get_externs(char *);
+static int  skip_blanks(void);
+static int  find_name(int,int,char);
+static void copy_file(char *,char const *);
+static void read_index(char *);
+static int  test_duplicate(char *);
+static int  test_externals(char *);
+static void add_file(int);
+static void display_file(int);
+static bool proceed(char const *);
+static void write_index(char *);
+static void dbegin(char *);
+static void dshow(int);
+static void dend(void);
+
 static int stop = 0;
-static unsigned char stype[MAXSYM], snames[MAXSYM][SYMSIZE+1], udata[25] = "",
+static char stype[MAXSYM], snames[MAXSYM][SYMSIZE+1], udata[25] = "",
 	*optr;
 
 static unsigned fcount=0, scount=0, ecount=0;
@@ -52,11 +70,19 @@ Opts:	?=file(query)	A=Addfile	I=Index		M=addMiddle\n\
 	-Quiet		-Writeinhibit\n" };
 
 /*
+ * strbeg() - test if string s begins with prefix p.
+ * Dunfield Micro-C built-in, not present in standard C libraries.
+ */
+static int strbeg(char *s, char *p) {
+    while(*p)
+        if(*s++ != *p++) return 0;
+    return 1;
+}
+
+/*
  * Main program
  */
-main(argc, argv)
-	int argc;
-	char *argv[];
+int main(int argc, char *argv[])
 {
 	int cmd, cmdc, i, j;
 	char *cmdv[30], filename[65];
@@ -76,7 +102,7 @@ main(argc, argv)
 		fputs("DDS MICRO-C Source Librarian\n?COPY.TXT 1991-2005 Dave Dunfield\n**See COPY.TXT**.\n", stderr);
 
 	if(!argc)
-		abort(htext);
+		die(htext);
 
 	copy_file(filename, ".LIB");	/* Insure its uppercase */
 	read_index(filename);			/* Read in the current description */
@@ -85,9 +111,9 @@ main(argc, argv)
 	if(verbose) {
 		printf("\n%s contains %u symbols in %u files with %u external references.\n",
 			filename, scount, fcount, ecount);
-		if(i = test_duplicate(0))
+		if((i = test_duplicate(0)))
 			printf("%u symbol name conflict(s)\n", i);
-		if(i = test_externals(0))
+		if((i = test_externals(0)))
 			printf("%u unresolved external reference(s)\n", i); }
 
 	/* Process any local commands */
@@ -137,8 +163,7 @@ main(argc, argv)
 /*
  * Display info about file
  */
-display_file(i)
-	int i;
+static void display_file(int i)
 {
 	int j;
 
@@ -160,9 +185,7 @@ display_file(i)
 /*
  * Lookup a name in the symbol list
  */
-find_name(low, high, err)
-	int low, high;
-	char err;
+static int find_name(int low, int high, char err)
 {
 	char buffer[65];
 	int i;
@@ -181,8 +204,7 @@ find_name(low, high, err)
 /*
  * Prompt for proceed
  */
-proceed(prompt)
-	char *prompt;
+static bool proceed(char const *prompt)
 {
 	char buffer[25];
 
@@ -190,15 +212,14 @@ proceed(prompt)
 		printf("%s (Y/N)? ", prompt);
 		fgets(optr = buffer, sizeof(buffer), stdin);
 		switch(toupper(skip_blanks())) {
-			case 'Y' : return -1;
-			case 'N' : return 0; } }
+			case 'Y' : return true;
+			case 'N' : return false; } }
 }
 
 /*
  * Add a source file to the archive
  */
-add_file(type)
-	int type;
+static void add_file(int type)
 {
 	int otop;
 	char buffer[200], *ptr;
@@ -243,8 +264,7 @@ add_file(type)
 /*
  * Write out the index file
  */
-write_index(file)
-	char *file;
+static void write_index(char *file)
 {
 	int i, j;
 	char *ptr, flag;
@@ -295,8 +315,7 @@ write_index(file)
 /*
  * Read an index file into the tables
  */
-read_index(file)
-	char *file;
+static void read_index(char *file)
 {
 	int ftype, pptr;
 	char buffer[100];
@@ -344,13 +363,13 @@ read_index(file)
 /*
  * Locate the external references in a file
  */
-get_externs(file)
-	char *file;
+
+static void get_externs(char *file)
 {
 	char buffer[200], *ptr1, *ptr2;
 	FILE *fp;
 
-	if(fp = fopen(file, "r")) {
+	if((fp = fopen(file, "r"))) {
 		while(fgets(buffer, sizeof(buffer), fp)) {
 			if(strbeg(buffer, "$EX:")) {
 				++ecount;
@@ -366,7 +385,7 @@ get_externs(file)
 /*
  * Skip ahead to non blank
  */
-skip_blanks()
+static int skip_blanks(void)
 {
 	while(isspace(*optr))
 		++optr;
@@ -376,14 +395,13 @@ skip_blanks()
 /*
  * Copy a filename from the operand pointer & convert to upper case
  */
-copy_file(dest, ext)
-	char *dest, *ext;
+static void copy_file(char *dest, char const *ext)
 {
-	char flag;
-	flag = -1;
+	bool flag = true;
+
 	while(*optr && !isspace(*optr)) {
 		if((*dest++ = toupper(*optr++)) == '.')
-			flag = 0; }
+			flag = false; }
 	*dest = 0;
 
 	if(flag)
@@ -393,8 +411,7 @@ copy_file(dest, ext)
 /*
  * Test that externals are all resolved
  */
-test_externals(title)
-	char *title;
+static int test_externals(char *title)
 {
 	int i, j, count;
 	char *ptr;
@@ -420,8 +437,7 @@ test_externals(title)
 /*
  * Test for multiple definitions
  */
-test_duplicate(title)
-	char *title;
+static int test_duplicate(char *title)
 {
 	int i, j, count;
 	char *ptr;
@@ -444,8 +460,7 @@ test_duplicate(title)
 /*
  * Set up for symbol display output
  */
-dbegin(title)
-	char *title;
+static void dbegin(char *title)
 {
 	dfile = ofile = dflag = -1;;
 	dtitle = title;
@@ -454,8 +469,7 @@ dbegin(title)
 /*
  * Display the next name from the list
  */
-dshow(name)
-	int name;
+static void dshow(int name)
 {
 	if(dtitle) {
 		if(dflag < 0) {
@@ -473,7 +487,7 @@ dshow(name)
 /*
  * End symbol display output
  */
-dend()
+static void dend(void)
 {
 	if(dtitle && (dflag >= 0))
 		putc('\n', stdout);

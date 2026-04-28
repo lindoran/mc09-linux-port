@@ -12,6 +12,7 @@
  * **See COPY.TXT**.
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,6 +51,11 @@
 #define	ST_NO_CONT	0x01	/* No continuation on next line */
 #define	ST_NO_CONC	0x02	/* No concatination */
 #define	ST_IN_CONC	0x04	/* Allow concat from input stream */
+
+static void copy_name(char **);
+static void severe_error(char *);
+static bool read_line(void);
+static int  expression(void);
 
 /* input & output buffers & pointers */
 static char out_buffer[2000], in_buffer[LINE_SIZE], *input_ptr, *output_ptr;
@@ -93,7 +99,7 @@ static void fprint(char *fmt, ...)
 	char c;
 	va_list ap;
 	va_start(ap, fmt);
-	while(c = *fmt++) {
+	while((c = *fmt++)) {
 		if(c != '%') { *output_ptr++ = c; continue; }
 		switch(c = *fmt++) {
 			case 's':
@@ -120,7 +126,7 @@ static void fprint(char *fmt, ...)
 /*
  * Get current time/date via POSIX localtime()
  */
-get_time_date()
+static void get_time_date(void)
 {
 	time_t t = time(0);
 	struct tm *tm = localtime(&t);
@@ -135,7 +141,7 @@ get_time_date()
 /*
  * Main program, read lines and write them to the output file
  */
-main(argc, argv)
+int main(argc, argv)
 	int argc;
 	char *argv[];
 {
@@ -244,8 +250,7 @@ main(argc, argv)
 /*
  * Test for a valid character to start a name
  */
-isname(c)
-	char c;
+static bool isname(char c)
 {
 	return ((c >= 'a') && (c <= 'z'))
 		|| ((c >= 'A') && (c <= 'Z'))
@@ -255,8 +260,7 @@ isname(c)
 /*
  * Test for valid character in a name.
  */
-is_name(c)
-	char c;
+static bool is_name(char c)
 {
 	return isname(c) || isdigit(c);
 }
@@ -264,7 +268,7 @@ is_name(c)
 /*
  * Skip to next non-blank (space or tab) in buffer
  */
-skip_blanks()
+static int skip_blanks(void)
 {
 	while((*input_ptr == ' ') || (*input_ptr == '\t'))
 		++input_ptr;
@@ -274,27 +278,25 @@ skip_blanks()
 /*
  * Test for a string in input stream
  */
-match(ptr)
-	char *ptr;
+static bool match(char *ptr)
 {
 	register char *ptr1;
 
 	ptr1 = input_ptr+1;
 	while(*ptr)
 		if(*ptr++ != *ptr1++)	/* symbols do not match */
-			return 0;
+			return false;
 	if(is_name(*ptr1))			/* symbol continues */
 		return 0;
 	input_ptr = ptr1;
 	skip_blanks();
-	return 1;
+	return true;
 }
 
 /*
  * Display an error message
  */
-line_error(msg)
-	char *msg;
+static void line_error(char *msg)
 {
 	char buffer[80], *ptr;
 	ptr = output_ptr;
@@ -309,8 +311,7 @@ line_error(msg)
 /*
  * Display an error message & terminate
  */
-severe_error(msg)
-	char *msg;
+static void severe_error(char *msg)
 {
 	line_error(msg);
 	exit(-1);
@@ -319,7 +320,7 @@ severe_error(msg)
 /*
  * Test for more macro parameters
  */
-more_parms()
+static bool more_parms(void)
 {
 	register char c;
 
@@ -333,8 +334,7 @@ more_parms()
 /*
  * Skip over a comment + copy to the output file if necessary
  */
-skip_comment(flag)
-	char flag;
+static bool skip_comment(char flag)
 {
 	int comment_depth;
 	register char c;
@@ -370,24 +370,24 @@ skip_comment(flag)
 				--comment_depth;
 				if(flag)
 					*output_ptr++ = '/'; } }
-		return 0; }
+		return false; }
 
 	if(c == '/') {						/* C++ style comment */
 		if(flag) {
 			do
 				*output_ptr++ = c;
-			while(c = *input_ptr++); }
+			while((c = *input_ptr++))
+				; }
 		input_ptr = "";
-		return 0; }
+		return false; }
 
-	return -1;							/* No comment */
+	return true;							/* No comment */
 }
 
 /*
  * Copy a named symbol from the input buffer
  */
-copy_name(dest_ptr)
-	char **dest_ptr;
+static void copy_name(char **dest_ptr)
 {
 	register char *dest;
 
@@ -403,9 +403,7 @@ copy_name(dest_ptr)
  * Copy a quoted string from the input buffer
  * with regard for "protected" characters.
  */
-copy_string(dest_ptr, src_ptr, flag)
-	char **dest_ptr, **src_ptr;
-	char flag;
+static void copy_string(char **dest_ptr, char **src_ptr, char flag)
 {
 	char *dest, *src, delim;
 	register char c;
@@ -453,7 +451,7 @@ nofix:
 /*
  * Resolve special symbol names
  */
-special_symbol()
+static bool special_symbol(void)
 {
 	unsigned x;
 	static char *months[] = { "???", "Jan", "Feb", "Mar", "Apr",
@@ -478,13 +476,13 @@ special_symbol()
 				case 'D' : x = day;			goto pr2;
 				case 'M' : x = month;		goto pr2;
 				case 'y' : x = year%100;	goto pr2;
-				case 'h' : if(x = hour%12)	goto pr2;
+				case 'h' : if((x = hour%12))	goto pr2;
 					x=12;
 				pr2: fprint("%2", x);		continue;
 				case 'Y' : fprint("%u", year); continue;
 				case 'S' : fprint("%s", months[month]); continue;
 				case '}' : ++input_ptr; goto tstend;
-				case '\\' : if(x = *++input_ptr) break;
+				case '\\' : if((x = *++input_ptr)) break;
 				case 0   : line_error("Invalid TIME code"); goto tstend;
 				case 'p' :
 				case 'P' : if(hour < 12) x -= ('P'-'A'); }
@@ -497,15 +495,14 @@ special_symbol()
 		tstend:
 			if(is_name(*input_ptr))
 				*output_ptr++ = ' ';
-			return 0; } }
-	return -1;
+			return false; } }
+	return true;
 }
 
 /*
  * Lookup a word from the input stream to see if it is a macro
  */
-lookup_macro(eflag)
-	char eflag;
+static int lookup_macro(char eflag)
 {
 	register int i;
 	char *name;
@@ -523,7 +520,7 @@ lookup_macro(eflag)
 /*
  * Resolve a word into a macro definition (if it is defined)
  */
-resolve_macro()
+static void resolve_macro(void)
 {
 	char *mptr, *save_ptr, *xptr;
 	int i;
@@ -544,7 +541,7 @@ resolve_macro()
 					skip_blanks();
 					parm_index[parm++] = parm_ptr;
 					i = 0;
-					while((c = *input_ptr) && (i || (c != ',') && (c != ')'))) {
+					while((c = *input_ptr) && (i || ((c != ',') && (c != ')')))) {
 						if(isname(c)) {		/* possible nested def */
 							xptr = output_ptr;
 							resolve_macro();
@@ -566,10 +563,10 @@ resolve_macro()
 		output_ptr = save_ptr;
 		save_ptr = input_ptr;
 		input_ptr = mptr;
-		while(c = *input_ptr) {			/* copy over definition */
+		while((c = *input_ptr)) {			/* copy over definition */
 			if(c & 0x80) {				/* parameter substitution */
 				++input_ptr;
-				if((i = c & 0x7f) < parm) {
+				if((unsigned)(i = c & 0x7f) < parm) {
 					for(xptr = parm_index[i]; *xptr; ++xptr)
 						*output_ptr++ = *xptr; }
 				continue; }
@@ -598,10 +595,10 @@ resolve_macro()
 /*
  * Copy input line to output buffer while resolving macros
  */
-resolve_line()
+static void resolve_line(void)
 {
 	register char c;
-	while(c = *input_ptr) {
+	while((c = *input_ptr)) {
 		if(isname(c)) {				/* symbol, could be macro */
 			if((c != '_') || special_symbol())
 				resolve_macro(); }
@@ -617,22 +614,21 @@ resolve_line()
 /*
  * Test for "if" processing enabled, and prepare for "if"
  */
-test_if()
+static bool test_if(void)
 {
 	define_pool[--if_top] = if_flag;	/* Stack current if status */
 	if(!(if_flag & IF_TRUE)) {			/* If disabled...*/
 		if_flag = IF_WAS_TRUE;			/* No processing at this level */
-		return 0; }						/* Do not perform test */
-	if_flag = 0;						/* Assume false */
-	return -1;							/* And perform test */
+		return false; }						/* Do not perform test */
+	if_flag = false;						/* Assume false */
+	return true;							/* And perform test */
 }
 
 /*
  * Read a line & perform pre-processing
  */
-read_line()
+static bool read_line(void)
 {
-	int i;
 	register char c;
 
 	for(;;) {
@@ -643,14 +639,14 @@ read_line()
 				input_fp = incl_fp[include];
 				fnptr = file_name[include];
 				continue; }
-			return 0; }
+			return false; }
 		++line_number;
 		output_ptr = out_buffer;
 		if(skip_blanks() != '#') {		/* No directive */
 			if(if_flag & IF_TRUE) {
 				input_ptr = in_buffer;
 				resolve_line();
-				return -1; }
+				return true; }
 			continue; }
 		if(match("ifdef")) {			/* if macro defined */
 			if(test_if() && (lookup_macro(0) != -1))
@@ -697,7 +693,7 @@ read_line()
 				copy_name(&define_ptr);		/* get macro name */
 				++define_ptr;
 				if(dupwarn) {
-					for(i = macro - 1; i >= 0; --i)			/* look it up */
+					for(int i = macro - 1; i >= 0; --i)			/* look it up */
 						if(!strcmp(define_index[macro], define_index[i])) {
 							line_error("Duplicate macro");
 							break; } }
@@ -721,7 +717,7 @@ read_line()
 				else
 					*define_ptr++ = 0;
 				skip_blanks();
-				while(c = *input_ptr) {
+				while((c = *input_ptr)) {
 					if((c == '\\') && !*(input_ptr+1)) {	/* Multi-line */
 						fgets(input_ptr = in_buffer, LINE_SIZE, input_fp);
 						++line_number;
@@ -730,7 +726,7 @@ read_line()
 					output_ptr = define_ptr;
 					if(isname(c)) {
 						resolve_macro();
-						for(i=0; i < parm; ++i) {
+						for(unsigned int i=0; i < parm; ++i) {
 							if(!strcmp(define_ptr, parm_index[i])) {
 								*define_ptr = i + 0x80;
 								output_ptr = ++define_ptr;
@@ -753,19 +749,21 @@ read_line()
 				*define_ptr++ = 0;
 				++macro; }
 			else if(match("undef")) {			/* undefine a macro (silent no-op if not defined) */
+				int i;
 				if((i = lookup_macro(0)) != -1) {
-					if(i == (macro - 1))		/* last one, simple delete */
+					if((unsigned)i == (macro - 1))		/* last one, simple delete */
 						define_ptr = define_index[i];
 					else {						/* not last, reclaim space */
 						define_ptr -= (parm = (input_ptr = define_index[i+1]) -
 							(parm_ptr = define_index[i]));
 						while(parm_ptr < define_ptr)
 							*parm_ptr++ = *input_ptr++;
-						while(i < macro) {		/* adjust index list */
+						while((unsigned)i < macro) {		/* adjust index list */
 							define_index[i] = define_index[i+1] - parm;
 							++i; } }
 					--macro; } }
-			else if(match("forget")) {			/* undefine a block of macros */
+			else if(match("forget")) {
+				int i;			/* undefine a block of macros */
 				if((i = lookup_macro(-1)) != -1)
 					define_ptr = define_index[macro = i]; }
 			else if(match("include")) {		/* include a file */
@@ -785,7 +783,7 @@ read_line()
 				*output_ptr = 0;
 				incl_fp[include] = input_fp;
 				incl_line[include] = line_number;
-				if(input_fp = fopen(out_buffer, "r")) {
+				if((input_fp = fopen(out_buffer, "r"))) {
 					line_number = 0;
 					++include;
 					strcpy(fnptr = file_name[include], out_buffer); }
@@ -809,7 +807,7 @@ read_line()
 /*
  * Get a numerical data value from the input stream
  */
-get_value()
+static int get_value(void)
 {
 	unsigned num;
 	num = 0;
@@ -839,9 +837,9 @@ get_value()
 /*
  * Process a numerical expression in the input stream.
  */
-expression()
+static int expression(void)
 {
-	unsigned value;
+	int value;
 
 	value = get_value();
 	for(;;) {

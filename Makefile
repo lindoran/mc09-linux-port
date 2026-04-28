@@ -77,28 +77,28 @@ usim09-target: targets/usim09/lib09/EXTINDEX.LIB
 
 # ── build ──────────────────────────────────────────────────────────────────
 
-mcc09: compile.c io.c 6809cg.c compile.h tokens.h portab.h
+mcc09: compile.c io.c 6809cg.c compile.h tokens.h portab.h 6809cg.h
 	$(CC) $(CFLAGS) -DCPU=6809 -o $@ compile.c io.c 6809cg.c
 
 asm09: asm09.c xasm.h portab.h
 	$(CC) $(CFLAGS) -o $@ asm09.c
 
-mco09: mco.c 6809.mco microc.h
+mco09: mco.c 6809.mco microc.h portab.h
 	$(CC) $(CFLAGS) -DCPU=6809 -o $@ mco.c
 
-slink: slink.c microc.h
+slink: slink.c microc.h portab.h
 	$(CC) $(CFLAGS) -o $@ slink.c
 
-slib: slib.c microc.h
+slib: slib.c microc.h portab.h
 	$(CC) $(CFLAGS) -o $@ slib.c
 
-sindex: sindex.c microc.h
+sindex: sindex.c microc.h portab.h
 	$(CC) $(CFLAGS) -o $@ sindex.c
 
-sconvert: sconvert.c microc.h
+sconvert: sconvert.c microc.h portab.h
 	$(CC) $(CFLAGS) -o $@ sconvert.c
 
-cc09: cc09.c microc.h
+cc09: cc09.c
 	$(CC) $(CFLAGS) -o $@ cc09.c
 
 mcp: mcp.c microc.h

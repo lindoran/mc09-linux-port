@@ -4,15 +4,35 @@
  * ?COPY.TXT 1983-2005 Dave Dunfield
  * **See COPY.TXT**.
  */
+#include <stdbool.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "xasm.h"
 
+static int  compsym(unsigned char *,unsigned char *);
+static int  locins(unsigned char []);
+static bool readline(void);
+static bool isterm(char);
+static bool issymbol(char);
+static int  evlind(unsigned char);
+static int  memop(void);
+static int  addreg(void);
+static int  eval(void);
+static int  getval(void);
+static void reperr(int);
+static int  getreg(void);
+static int  nxtelem(void);
+static void wrrec(void);
+static void write_title(void);
+static void optfail(void);
+
 /* 6809 opcode table */
-static char opcodes[] = {
+
+static unsigned char opcodes[] = {
 	'L','B','S','R',0x88,0x17,0xcf,0xcf,0xcf,
 	'L','D','A',	0x82,0x86,0x96,0xa6,0xb6,
 	'C','M','P','A',0x82,0x81,0x91,0xa1,0xb1,
@@ -192,7 +212,7 @@ static char *etext[] = { "?",
 	"Improperly delimited string" } ;
 
 /* push pull register translation */
-char xlat[] = { 0x06, 0x10, 0x20, 0x40, 0x40, 0x80, 0, 0, 0x02, 0x04,
+static unsigned char xlat[] = { 0x06, 0x10, 0x20, 0x40, 0x40, 0x80, 0, 0, 0x02, 0x04,
 				0x01, 0x08 } ;
 
 /* Symbol table & free pointer */
@@ -214,9 +234,7 @@ FILE *asm_fp, *hex_fp, *lst_fp;
 /*
  * Define a symbol in the symbol table
  */
-char *create_symbol(symbol, value)
-	char *symbol;
-	int value;
+static char *create_symbol(char *symbol, int value)
 {
 	register unsigned char *ptr, *ptr1;
 
@@ -228,15 +246,14 @@ char *create_symbol(symbol, value)
 	*++ptr = value;
 	if(ptr < (symtab+sizeof(symtab))) {
 		symtop = ptr + 1;
-		return ptr1; }
+		return (char *)ptr1; }
 	return 0;
 }
 
 /*
  * Lookup a symbol in the symbol table
  */
-char *lookup_symbol(symbol)
-	char *symbol;
+static char *lookup_symbol(char *symbol)
 {
 	register int l;
 	register unsigned char *ptr, *ptr1, *ptr2;
@@ -246,7 +263,7 @@ again:
 	if((ptr2 = ptr) >= symtop) {
 		value = 0x8888;
 		return 0; }
-	ptr1 = symbol;
+	ptr1 = (unsigned char *)symbol;
 	l = *ptr++ & SYMMASK;
 	while(l--) {
 		if(*ptr1++ != *ptr++) {
@@ -257,15 +274,13 @@ again:
 		goto again; }
 	value = *ptr++ << 8;
 	value |= *ptr;
-	return ptr2;
+	return (char *)ptr2;
 }
 
 /*
  * Set the value for a symbol in the symbol table
  */
-set_symbol(ptr, value)
-	char *ptr;
-	unsigned value;
+static void set_symbol(char *ptr, unsigned int value)
 {
 	ptr += (*ptr & SYMMASK);
 	*++ptr = value >> 8;
@@ -275,7 +290,7 @@ set_symbol(ptr, value)
 /*
  * Display the symbol table (sorted)
  */
-dump_symbols()
+static void dump_symbols(void)
 {
 	unsigned char *ptr, *hptr;
 	unsigned int l, h, w;
@@ -314,9 +329,7 @@ found:	for(ptr = (*hptr & SYMMASK) + hptr + 3; ptr < symtop; ptr += (*ptr & SYMM
 /*
  * Compare two symbol table entries
  */
-compsym(sym1, sym2)
-	unsigned char *sym1;
-	unsigned char *sym2;
+static int compsym(unsigned char *sym1, unsigned char *sym2)
 {
 	int l, l1, l2;
 	l1 = *sym1++ & SYMMASK;
@@ -338,36 +351,27 @@ compsym(sym1, sym2)
 /************************************/
 /* get a character from the operand */
 /************************************/
-char getchr()
+static char getchr(void)
 {
 	register char chr;
 
-	if(chr=operand[optr]) ++optr;
-	return chupper(chr);
-}
-
-/*
- * Convert character to upper case if NOT case sensitive
- */
-chupper(c)
-	char c;
-{
-	return casf ? c : ((c >= 'a') && (c <= 'z')) ? c - ('a'-'A') : c;
+	if((chr=operand[optr])) ++optr;
+	return toupper(chr);
 }
 
 /*
  * Open a filename with the appriopriate extension &
  * report an error if not possible
  */
-FILE *open_file(filename, extension, options)
-	char *filename, *extension, *options;
+static FILE *open_file(char *filename, char *extension, char const *options)
 {
-	char buffer[100], *ptr, *dot;
+	char buffer[FILENAME_MAX], *ptr;
+	char *dot;
 	FILE *fp;
 
 	dot = 0;
 
-	for(ptr = buffer; *ptr = *filename; ++ptr) {	/* Copy filename */
+	for(ptr = buffer; (*ptr = *filename); ++ptr) {	/* Copy filename */
 		if(*filename == '.')
 			dot = filename;
 		else if(*filename == '\\')
@@ -392,21 +396,19 @@ FILE *open_file(filename, extension, options)
 /*
  * Main program
  */
-main(argc,argv)
-	unsigned argc;
-	char *argv[];
-{	unsigned i, vbyt, temp, daddr;
+int main(int argc,char *argv[])
+{	unsigned vbyt, temp, daddr;
 	int stemp;
 	char pflg, cflg, chr, *ptr, *lfile, *cfile;
 
 	if(argc < 2)
-		abort("\nUse: asm09 <filename> [-cfiqst c=file l=file o=n p=length w=width]\n\n?COPY.TXT 1983-2005 Dave Dunfield\n**See COPY.TXT**.\n");
+		die("\nUse: asm09 <filename> [-cfiqst c=file l=file o=n p=length w=width]\n\n?COPY.TXT 1983-2005 Dave Dunfield\n**See COPY.TXT**.\n");
 
 	pflg = 0;
 
 /* parse for command line options. */
 	lfile = cfile = argv[1];
-	for(i=2; i < argc; ++i) {
+	for(int i=2; i < argc; ++i) {
 		if(*(ptr = argv[i]) == '-') {		/* Enable switch */
 			while(*++ptr) switch(toupper(*ptr)) {
 				case 'C' : casf = -1;		break;
@@ -437,8 +439,12 @@ main(argc,argv)
 	ocnt = ecnt = 0;
 	do {
 		addr = cflg = 0; line = 1; curdp = -1;
-		if(!quietf)	if(pflg) fprintf(stderr,"Opt... ");
-					else fprintf(stderr,"First pass... ");
+		if(!quietf) {
+			if(pflg)
+				fprintf(stderr,"Opt... ");
+			else
+				fprintf(stderr,"First pass... ");
+		}
 		while(readline()) {
 			if(!optr) {
 				locins(instruction);
@@ -517,7 +523,7 @@ twobyt:					length += 2;
 						break;
 					case 104 :			/* FCC statements */
 						chr=operand[0];
-						for(i=1;(operand[i])&&(chr!=operand[i]); ++i) ++length;
+						for(int i=1;(operand[i])&&(chr!=operand[i]); ++i) ++length;
 						if(iinfo[1]) ++length;
 						break;
 					case 105 :			/* RMB statement */
@@ -554,7 +560,7 @@ end1:	++pflg;
 					if(iinfo[1]) instruction[length++] = iinfo[1];
 				break;
 				case 2 :			/* 8 bit memory reference. */
-					if(otype=memop()) ++length;
+					if((otype=memop())) ++length;
 pnimm:				instruction[temp++]=iinfo[otype];
 					vbyt=length-1;
 					if(otype==2) {
@@ -609,7 +615,7 @@ p2t5:				otype=memop();
 					break ;
 				case 10 :		/* transfer and exchange */
 					instruction[temp++] = iinfo[0];
-					i = getreg();
+					int i = getreg();
 					if(getchr() != ',') reperr(7);
 					instruction[temp++] = (i << 4) | getreg();
 					length = 2;
@@ -672,7 +678,7 @@ p2t5:				otype=memop();
 					break;
 				case 125 :			/* LINE directive */
 					line = eval(); }
-			if((instruction[0]==0xffcf)&&(itype<100)) reperr(3); /* invalid addressing mode */
+			if((instruction[0]==0xffcf)&&(itype<100)) reperr(3); /* invalid addressing mode */ // XXX ???
 			if(vbyt==2) instruction[temp++]=value >> 8;
 			if(vbyt) instruction[temp++]=value; }
 			else length = itype = 0;
@@ -681,7 +687,7 @@ p2t5:				otype=memop();
 		if(++lcount >= pagel)
 			write_title();
 		fprintf(lst_fp,"%04x ",daddr);
-			for(i=0; i < 6; ++i) {
+			for(unsigned int i=0; i < 6; ++i) {
 				if(i < length)
 					fprintf(lst_fp," %02x",instruction[i]);
 				else
@@ -693,7 +699,7 @@ p2t5:				otype=memop();
 		emsg=0; }
 	++line; /* += (itype<120); */
 /* write code to output record */
-	for(i=0; i < length; ++i) {
+	for(unsigned int i=0; i < length; ++i) {
 		if(!ocnt) {			/* first byte of record */
 			outrec[ocnt++]=addr>>8;
 			outrec[ocnt++]=addr; }
@@ -725,10 +731,9 @@ end2:
 /***********************************************/
 /* lookup instruction in the instruction table */
 /***********************************************/
-int locins(inst)
-	char inst[];
+static int locins(unsigned char inst[])
 {
-	register char *ptr, *ptr1;
+	register unsigned char *ptr, *ptr1;
 	int i;
 
 	ptr = opcodes;
@@ -737,7 +742,7 @@ int locins(inst)
 		while(*ptr == *ptr1) {
 			++ptr;
 			++ptr1; }
-		if((*ptr < 0) && !*ptr1) {
+		if((*ptr > 0x7F) && !*ptr1) {
 			itype = *ptr++ & 127;
 			for(i=0; i < 4; ++i)
 				iinfo[i] = *ptr++;
@@ -752,17 +757,17 @@ int locins(inst)
 /*************************************************/
 /* read a line from input file, and break it up. */
 /*************************************************/
-int readline()
+static bool readline(void)
 {
-	register int i;
+	register size_t i;
 	register char *ptr;
 
 	if(!fgets(ptr = buffer, LINE_SIZE, asm_fp))
-		return 0;
+		return false;
 
 	i = 0;
 	while(issymbol(*ptr)) {
-		label[i] = chupper(*ptr++);
+		label[i] = toupper(*ptr++);
 		if(i < SYMB_SIZE)
 			++i; }
 	label[i]=0;
@@ -781,19 +786,19 @@ int readline()
 		while(*ptr && (i < (sizeof(operand)-1)))
 			operand[i++] = *ptr++;
 		operand[i] = 0;
-		return 1; }
+		return true; }
 
-	return optr = 1;
+	optr = 1;
+	return true;
 }
 
 /***************************************/
 /* test for valid terminator character */
 /***************************************/
-int isterm(chr)
-	register char chr;
+static bool isterm(char chr)
 {
 	switch(chr) {
-		case 0 :
+		case '\0':
 		case '\n':  /* fgets includes newline; treat as terminator */
 		case '\r':  /* guard against any stray CR */
 		case ';' :  /* inline comment */
@@ -802,22 +807,21 @@ int isterm(chr)
 		case ',' :
 		case ']' :
 		case ')' :
-			return 1; }
-	return 0;
+			return true; }
+	return false;
 }
 
 /*************************************/
 /* Test for a valid symbol character */
 /*************************************/
-int issymbol(c)
-	char c;
+static bool issymbol(char c)
 {
 	switch(c) {			/* Special allowed characters */
 		case '_' :
 		case '?' :
 		case '!' :
 		case '.' :
-			return 1; }
+			return true; }
 
 	return isalnum(c);
 }
@@ -825,24 +829,24 @@ int issymbol(c)
 /*********************************************/
 /* evaluate indexed memory reference operand */
 /*********************************************/
-int	evlind(unsigned char indir)
+static int evlind(unsigned char indir)
 {
 	register unsigned temp;
 	int stemp;
 	char chr;
 	temp=(operand[optr+1] == ',');
-	chr=chupper(operand[optr]);
+	chr=toupper(operand[optr]);
 	if(temp&&((chr=='A')||(chr=='B')||(chr=='D'))) {	/* accumulator offset */
 		if(chr=='A') post=0x86;
 		else post = (chr=='B') ? 0x85 : 0x8B;
 		optr += 2 ;
-		if(temp=addreg()) return temp;
+		if((temp=addreg())) return temp;
 		length=1;
 		return 2; }
 	else if(chr==',') {				/* no offset */
 		post=0x84;
 		++optr;
-		if(temp=addreg()) return temp;
+		if((temp=addreg())) return temp;
 		length=1;
 		return 2; }
 	else {
@@ -865,19 +869,19 @@ int	evlind(unsigned char indir)
 			if(indir & 0x04) goto fc16;
 			if((!(indir&1))&&(optf)&&(stemp<16)&&(stemp>= -16)) {	/* 5 bit */
 				post= value & 0x1f;
-				if(temp=addreg()) return temp;
+				if((temp=addreg())) return temp;
 				length=1;
 				return 2; }
 			else if ((optf)&&(stemp<128)&&(stemp>= -128)) {	/* 8 bit */
 			fc8:
 				post=0x88;
-				if(temp=addreg()) return temp;
+				if((temp=addreg())) return temp;
 				length=2;
 				return 2; }
 			else {						/* 16 bit offset */
 			fc16:
 				post=0x89;
-				if(temp=addreg()) return temp;
+				if((temp=addreg())) return temp;
 				length=3;
 				return 2; } } }
 }
@@ -885,12 +889,12 @@ int	evlind(unsigned char indir)
 /**************************/
 /* process memory operand */
 /**************************/
-int memop()
+static int memop(void)
 {
 	register unsigned temp;
 	register char chr;
 	optr=0;
-	if((chr=chupper(operand[optr++])) == '#') {	/* immediate addressing */
+	if((chr=toupper(operand[optr++])) == '#') {	/* immediate addressing */
 		value=eval();
 		length=2;
 		return 0; }
@@ -923,7 +927,7 @@ int memop()
 /***************************************/
 /* insert register value into postbyte */
 /***************************************/
-int addreg()
+static int addreg(void)
 {	register char chr;
 	register int stemp;
 	if((chr=getchr()) == '-') {			/* auto decrement */
@@ -957,7 +961,7 @@ int addreg()
 /*
  * Evaluate an expression.
  */
-int eval()
+static int eval(void)
 {	register char c;
 	unsigned result;
 
@@ -981,9 +985,9 @@ int eval()
 /*
  * Get a single value (number or symbol)
  */
-int getval()
+static int getval(void)
 {
-	unsigned i, b, val;
+	int i, b, val;
 	char chr, array[25], *ptr;
 
 	switch(chr = operand[optr++]) {
@@ -1040,7 +1044,7 @@ int getval()
 		val=addr; }
 	else {								/* Must be a label */
 		i = 0;
-		while(issymbol(chr = chupper(operand[optr]))) {
+		while(issymbol(chr = toupper(operand[optr]))) {
 			++optr;
 			label[i]=chr;
 			if(i < SYMB_SIZE)
@@ -1054,22 +1058,22 @@ int getval()
 }
 
 /* report an error */
-reperr(errn)
-	register int errn;
-{	if(!emsg) emsg=errn;
+static void reperr(int errn)
+{
+	if(!emsg) emsg=errn;
 }
 
 /*************************************************/
 /* decode a register value from the operand line */
 /*************************************************/
-int getreg() {
+static int getreg(void) {
 	register char chr;
 
 	if((chr=getchr()) == 'C') {
 		if(getchr() == 'C') return(10);
 		else reperr(4); }
 	else if(chr=='D') {
-		if(chupper(operand[optr]) == 'P') {
+		if(toupper(operand[optr]) == 'P') {
 			++optr;
 			return(11); }
 		else return(0); }
@@ -1085,12 +1089,13 @@ int getreg() {
 	else {
 		reperr(4);
 		return(0); }
+	abort();
 }
 
 /**************************************/
 /* find next element in argument list */
 /**************************************/
-int	nxtelem() {
+static int nxtelem(void) {
 	register char chr;
 	while((chr=operand[optr])&&(chr != ' ')&&(chr != 9)) {
 		++optr;
@@ -1103,7 +1108,7 @@ int	nxtelem() {
 /*******************************/
 /* write record to output file */
 /*******************************/
-wrrec()
+static void wrrec(void)
 {	register unsigned i, chk, chr;
 
 	xhex(ocnt-2);
@@ -1127,9 +1132,9 @@ wrrec()
 /*
  * Write out title
  */
-write_title()
+static void write_title(void)
 {
-	int w;
+	unsigned int w;
 	char *ptr;
 
 	if(pcount > 1)
@@ -1146,7 +1151,7 @@ write_title()
 /*
  * Too many optimization passes - report failure
  */
-optfail()
+static void optfail(void)
 {
 	fprintf(lst_fp,"** Line %u - Unable to resolve: %s\n", line, label);
 	++ecnt;

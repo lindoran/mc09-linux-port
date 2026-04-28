@@ -15,16 +15,24 @@
  *
  * Compile command: cc sconvert -fop
  */
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+
 #include "microc.h"
+#include "portab.h"
 
 #define	MAX_KEEP	200		/* Maximum number of symbols to "keep" */
 #define	MAX_SYMB	300		/* Maximum number of symbols to process */
 #define	RAM_POOL	25000	/* Memory pool for symbol storage */
 #define	LINE_SIZE	100		/* Maximum size of input line */
+
+extern bool issymbol(char);
+extern void substitute(char);
+extern void next_field(void);
+extern bool issep(char);
 
 static char com1 = '*', com2 = 0, prefix = '?', quiet = 0;
 
@@ -34,6 +42,16 @@ static char *keep[MAX_KEEP], *symbols[MAX_SYMB], pool[RAM_POOL];
 static char *inptr, inbuf[LINE_SIZE+1], *outptr, outbuf[LINE_SIZE+1];
 
 static FILE *ifp = 0, *ofp = 0;
+
+/*
+ * strbeg() - test if string s begins with prefix p.
+ * Dunfield Micro-C built-in, not present in standard C libraries.
+ */
+static int strbeg(char *s, char *p) {
+    while(*p)
+        if(*s++ != *p++) return 0;
+    return 1;
+}
 
 /*
  * Add an entry to the ram pool & return the address
@@ -54,7 +72,7 @@ char *add_pool(ptr)
 /*
  * Main program
  */
-main(argc, argv)
+int main(argc, argv)
 	int argc;
 	char *argv[];
 
@@ -100,7 +118,7 @@ main(argc, argv)
 				else if(!ofp)
 					ofp = fopen(argv[i], "wvq");
 				else
-					abort("Too many arguments"); } }
+					die("Too many arguments"); } }
 
 	/* Default to stdin/stdout if files not specified */
 	if(!ifp)
@@ -112,7 +130,7 @@ main(argc, argv)
 		fputs("DDS MICRO-C ASM Source Converter\n?COPY.TXT 1990-2005 Dave Dunfield\n**See COPY.TXT**.\n", stderr);
 
 	if(!argc)
-		abort("\nUse: SCONVERT [input [output]] [c=char C=char k=symbol K=file p=char -q]\n");
+		die("\nUse: SCONVERT [input [output]] [c=char C=char k=symbol K=file p=char -q]\n");
 
 /* Pass #1 - Record the symbol names */
 	if(!quiet)
@@ -143,7 +161,7 @@ main(argc, argv)
 			substitute(-1);
 			next_field();
 			/* And then copy the instruction "verbatium" */
-			while(c = *inptr) {
+			while((c = *inptr)) {
 				if((c == com2) || issep(c))
 					break;
 				*outptr++ = c;
@@ -167,13 +185,12 @@ main(argc, argv)
 /*
  * Process text & perform substitution
  */
-substitute(term)
-	char term;
+void substitute(char term)
 {
 	char c, buffer[50], *ptr;
 	int i;
 
-	while(c = *inptr) {
+	while((c = *inptr)) {
 		if((term && issep(c)) || (c == com2))
 			break;
 		if(issymbol(c)) {				/* A symbol name */
@@ -193,7 +210,7 @@ substitute(term)
 				do
 					*--ptr = (i%10) + '0';
 				while(i /= 10); }
-			while(c = *ptr++)			/* Copy over buffer */
+			while((c = *ptr++))			/* Copy over buffer */
 				*outptr++ = c;
 			continue; }
 		*outptr++ = c;					/* Anything else */
@@ -208,7 +225,7 @@ substitute(term)
  * Skip to the next field in the input file, and
  * insert a single space in the output file.
  */
-next_field()
+void next_field(void)
 {
 	/* Skip any trailing blanks */
 	while(issep(*inptr))
@@ -219,8 +236,7 @@ next_field()
 /*
  * Test for a valid symbol name
  */
-issymbol(c)
-	char c;
+bool issymbol(char c)
 {
 	return ((c >= 'a') && (c <= 'z'))
 		|| ((c >= 'A') && (c <= 'Z'))
@@ -230,8 +246,7 @@ issymbol(c)
 /*
  * Test for a valid separator character
  */
-issep(c)
-	char c;
+bool issep(char c)
 {
 	return (c == ' ') || (c == '\t');
 }

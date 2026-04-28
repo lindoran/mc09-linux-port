@@ -55,7 +55,7 @@ char *MC_fgets(buffer, max_len, fp)
 	int max_len;
 	FILE *fp;
 {
-	register int i, c;
+	register int i, c = 0;
 	register char *ptr;
 
 	i = 0;
