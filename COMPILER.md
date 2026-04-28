@@ -317,7 +317,7 @@ scaling block is skipped because both operands have POINTER set.
 
 ---
 
-
+## Cast semantics
 
 Casts are handled in the `case ORB:` branch of `get_value()` in `compile.c`.
 When a typecast keyword (`int`, `unsigned`, `char`, `const`, `register`, `void`)
@@ -372,7 +372,7 @@ update the type bits but never emit instructions.
 
 ---
 
-
+## Calling convention
 
 Arguments are pushed right-to-left onto the hardware stack (`S`). The
 called function sees them at positive offsets from `S`. The function

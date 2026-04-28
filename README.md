@@ -10,6 +10,7 @@ Released as freeware. See `COPY.TXT` in the original archives for licence terms.
 
 ### Documentation
 
+- [**Language Reference**](LANGUAGE.md) — complete language reference for programmers coming from modern C
 - [**Compiler Internals**](COMPILER.md) — architecture, type system, and code generation
 - [**Standard Library**](STDLIB.md) — runtime routines, serial I/O, and string/math functions
 - [**Test Suite Addendum**](TESTS_ADDENDUM.md) — compiler quirks, bugs, and target-specific findings
@@ -40,7 +41,7 @@ No floats to speak of, no built in long arithmatic (though you get a longmath li
 
 The back end uses a regisger only set up to evaluate expressions, while this produces very fast code it does limit the logical operations to 16 bits, and some expected casting behaivor creates some interesting quirks. Interestingly enough the state machine is "sort of" stack based, and could be made to run that way, however the runtime can be made VERY small in its current state. Mostly this is just enough to drop a monitor onto your board, load a sensor, talk to a PIO, run a servo, or read a relay kind of C.  
 
-I did this as a fun project and plan to poke at it between projects.  I am not hugely good at systems programing so anything I've touched may have bugs, and I use antigenic AI to check the code, so there could be outright mistakes.  The test suite is meant to be the source of truth and so far it passes everything  I am hugely proud of the state this is in.
+I did this as a fun project and plan to poke at it between projects.  I am not hugely good at systems programing so anything I've touched may have bugs, and I have been using AI tools to check the code, so there could be outright mistakes.  The test suite is meant to be the source of truth and so far it passes everything  I am hugely proud of the state this is in.
 
 ## Tools included
 
@@ -329,6 +330,10 @@ The `targets/usim09/` directory is a hand-written reference implementation.
 | `make` | Build all tools and regenerate `targets/coco/lib09/` and `targets/usim09/lib09/` |
 | `make test` | Compile and run the full test suite under usim09 |
 | `make test TEST=t06` | Run a single test suite by prefix |
+| `make test-coco` | Compile and run the full test suite under MAME coco2b |
+| `make test-coco TEST=t06` | Run a single test suite by prefix under coco2b |
+| `make coco` | Regenerate `targets/coco/lib09/` from `targets/coco/coco.cfg` via `mktarget` |
+| `make usim09-target` | Regenerate `targets/usim09/lib09/` from `targets/usim09/usim09.cfg` via `mktarget` |
 | `make env` | Generate `env.sh` — sourceable environment setup |
 | `make clean` | Remove binaries, test artefacts, and generated target lib09 directories |
 | `make install` | Install to `PREFIX` (default `/usr/local`) |
@@ -522,6 +527,10 @@ set, allowing `jump_if` to emit `CMPD #0` or `TSTB` inline.
 `uint16_t`, `int32_t`, `uint32_t`, and all `_MIN`/`_MAX` limit constants.
 
 **`stdbool.h`** — `bool`, `true`, `false`.
+
+**`assert.h`** — `assert(c)` expands to a `putstr` call showing file and line
+when `DEBUG` is defined; no-ops otherwise. Requires `cc09 -P` (uses parameterised
+macros).
 
 ### Build system
 

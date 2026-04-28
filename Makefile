@@ -218,5 +218,7 @@ install: all env
 clean:
 	rm -f mcc09 asm09 mco09 slink slib sindex sconvert cc09 mcp macro
 	rm -f tests/*.HEX tests/*.asm tests/*.lst
+	rm -f examples/hello_usim09/*.HEX examples/hello_usim09/*.asm examples/hello_usim09/*.lst
+	rm -f examples/hello_coco/*.HEX examples/hello_coco/*.asm examples/hello_coco/*.lst
 	rm -f '$$'[0-9] *.o env.sh
 	rm -rf targets/coco/lib09 targets/coco_test/lib09 targets/usim09/lib09
