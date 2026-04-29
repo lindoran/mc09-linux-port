@@ -400,7 +400,7 @@ main(argc,argv)
 	char pflg, cflg, chr, *ptr, *lfile, *cfile;
 
 	if(argc < 2)
-		abort("\nUse: asm09 <filename> [-cfiqst c=file l=file o=n p=length w=width]\n\n?COPY.TXT 1983-2005 Dave Dunfield\n**See COPY.TXT**.\n");
+		die("\nUse: asm09 <filename> [-cfiqst c=file l=file o=n p=length w=width]\n\n?COPY.TXT 1983-2005 Dave Dunfield\n**See COPY.TXT**.\n");
 
 	pflg = 0;
 
