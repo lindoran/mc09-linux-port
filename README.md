@@ -81,12 +81,9 @@ make
 
 Requires only `gcc` and `make`. The sources are K&R C compiled with
 `-std=gnu89` and a handful of `-Wno-*` flags to suppress the implicit-declaration
-warnings endemic to the Dunfield codebase.
+warnings endemic to the Dunfield codebase. 
 
-There are still some warnings after the build. What remains is genuinely
-benign: `-Wmultichar` in `slib.c` (an intentional Dunfield technique that works correctly
-on GCC x86). This doesn't translate into a toolchain bug. K&R C is very much a
-"you are the captain" situation, and we've made sure the ship isn't taking on water.
+Thanks to Sean Conner for his kind help removing all the compile time warnings and fixes in [a1ded82](https://github.com/lindoran/mc09-linux-port/commit/a1ded8240c5c75c73a0db34656fd20f678fbd565)
 
 ---
 
