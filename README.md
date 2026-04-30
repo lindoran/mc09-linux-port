@@ -15,7 +15,11 @@ Released as freeware. See `COPY.TXT` in the original archives for licence terms.
 - [**Standard Library**](STDLIB.md) — runtime routines, serial I/O, and string/math functions
 - [**Test Suite Addendum**](TESTS_ADDENDUM.md) — compiler quirks, bugs, and target-specific findings
 - [**Example code**](/examples/README.md) — compiler test programs under popular emulation.
-- [**Original Manuals**](mc-docs/) — the original Dunfield documentation for Micro-C and XASM09
+- [**Original Manuals**](mc-docs/) — the original Dunfield documentation for Micro-C and XASM09 with hp500 conversions*
+
+*=[hp500](https://github.com/lindoran/hp500) is a pdf compiler / printer emulator that takes PCL3 formatted documents and outputs a text searchable / selectable pdf in the style of a HP 500 Deskjet.
+
+
 
 ---
 
