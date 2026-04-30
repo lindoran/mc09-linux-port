@@ -18,7 +18,8 @@
 #include <ctype.h>
 #include <time.h>
 #include <stdarg.h>
-#include "microc.h"
+
+extern char *MC_fgets(char *,size_t,FILE *);
 
 /*
  * The following two macros define strings for handling
@@ -354,7 +355,7 @@ skip_comment(flag)
 					*output_ptr = 0;
 					fputs(output_ptr = out_buffer, output_fp);
 					putc('\n', output_fp); }
-				if(!fgets(input_ptr = in_buffer, LINE_SIZE, input_fp))
+				if(!MC_fgets(input_ptr = in_buffer, LINE_SIZE, input_fp))
 					severe_error("Unterminated comment");
 				++line_number;
 				continue; }
@@ -426,7 +427,7 @@ copy_string(dest_ptr, src_ptr, flag)
 				if(flag & ST_NO_CONT)
 					goto unstr;
 				dest -= 2;
-				if(!fgets(src = in_buffer, LINE_SIZE, input_fp))
+				if(!MC_fgets(src = in_buffer, LINE_SIZE, input_fp))
 					goto unstr;
 				++line_number; } } }
 
@@ -636,7 +637,7 @@ read_line()
 	register char c;
 
 	for(;;) {
-		if(!fgets(input_ptr = in_buffer, LINE_SIZE, input_fp)) {
+		if(!MC_fgets(input_ptr = in_buffer, LINE_SIZE, input_fp)) {
 			if(include) {
 				fclose(input_fp);
 				line_number = incl_line[--include];
@@ -723,7 +724,7 @@ read_line()
 				skip_blanks();
 				while(c = *input_ptr) {
 					if((c == '\\') && !*(input_ptr+1)) {	/* Multi-line */
-						fgets(input_ptr = in_buffer, LINE_SIZE, input_fp);
+						MC_fgets(input_ptr = in_buffer, LINE_SIZE, input_fp);
 						++line_number;
 						*define_ptr++ = '\n';
 						continue; }

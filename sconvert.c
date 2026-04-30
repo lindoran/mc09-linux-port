@@ -15,11 +15,16 @@
  *
  * Compile command: cc sconvert -fop
  */
+
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "microc.h"
+#include "portab.h"
+
+extern char *MC_fgets(char *,size_t,FILE *);
+extern bool  strbeg(char const *restrict,char const *restrict);
 
 #define	MAX_KEEP	200		/* Maximum number of symbols to "keep" */
 #define	MAX_SYMB	300		/* Maximum number of symbols to process */
@@ -74,7 +79,7 @@ main(argc, argv)
 				break;
 			case ('K'<<8)|'=' :		/* File of names to KEEP */
 				fp = fopen(ptr, "rvq");
-				while(fgets(inbuf, LINE_SIZE, fp))
+				while(MC_fgets(inbuf, LINE_SIZE, fp))
 					if(issymbol(*inbuf))
 						keep[kcount++] = add_pool(inbuf);
 				fclose(fp);
@@ -100,7 +105,7 @@ main(argc, argv)
 				else if(!ofp)
 					ofp = fopen(argv[i], "wvq");
 				else
-					abort("Too many arguments"); } }
+					die("Too many arguments"); } }
 
 	/* Default to stdin/stdout if files not specified */
 	if(!ifp)
@@ -112,12 +117,12 @@ main(argc, argv)
 		fputs("DDS MICRO-C ASM Source Converter\n?COPY.TXT 1990-2005 Dave Dunfield\n**See COPY.TXT**.\n", stderr);
 
 	if(!argc)
-		abort("\nUse: SCONVERT [input [output]] [c=char C=char k=symbol K=file p=char -q]\n");
+		die("\nUse: SCONVERT [input [output]] [c=char C=char k=symbol K=file p=char -q]\n");
 
 /* Pass #1 - Record the symbol names */
 	if(!quiet)
 		fputs("First pass... ", stderr);
-	while(fgets(inptr = inbuf, LINE_SIZE, ifp)) {
+	while(MC_fgets(inptr = inbuf, LINE_SIZE, ifp)) {
 		if(strbeg(inbuf, "$DD:"))
 			inptr += 4;
 		if(issymbol(c = *inptr)) {		/* Symbol definition */
@@ -136,7 +141,7 @@ main(argc, argv)
 	rewind(ifp);
 	if(!quiet)
 		fputs("Second pass... ", stderr);
-	while(fgets(inptr = inbuf, LINE_SIZE, ifp)) {
+	while(MC_fgets(inptr = inbuf, LINE_SIZE, ifp)) {
 		outptr = outbuf;
 		if(*inptr && (*inptr != com1)) {
 			/* First, copy over the symbol name */
