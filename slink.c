@@ -15,13 +15,15 @@
  * **See COPY.TXT**.
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include "portab.h"
 
-extern char *MC_fgets(char *,size_t,FILE *);
+extern char *safestrcpy(char [],size_t,char const *);
+extern char *MC_fgets(char [],size_t,FILE *);
 
 /* Fixed parameters */
 #define	NUM_SEG	10			/* Maximum number of segments */
@@ -41,6 +43,16 @@ extern char *MC_fgets(char *,size_t,FILE *);
 	#define	MAXSYMS	500		/* Maximum number of symbols to process */
 	#include "c:\project\demonote.txt"
 #endif
+
+static void process_index(void);
+static void process_file(FILE *);
+static void reserve_data(char *);
+static unsigned int get_number(char const *);
+static void lookup(char *);
+static void select_segment(unsigned int);
+static void flush_segment(void);
+static int  parse(char *);
+static void fputn(unsigned int,FILE *);
 
 /*
  * The following defines the character which is used to separate a
@@ -92,11 +104,11 @@ Opts:	-c	remove Comments		c=char	Comment character\n\
 " };
 
 #ifdef DEMO
-char hello[] = { "DDS MICRO-C Source Linker (Demo)\n\
+static char hello[] = { "DDS MICRO-C Source Linker (Demo)\n\
 ?COPY.TXT 1990-2005 Dave Dunfield\n\
 **See COPY.TXT**.\n" };
 #else
-char hello[] = { "DDS MICRO-C Source Linker\n\
+static char hello[] = { "DDS MICRO-C Source Linker\n\
 ?COPY.TXT 1990-2005 Dave Dunfield\n\
 **See COPY.TXT**.\n" };
 #endif
@@ -104,18 +116,19 @@ char hello[] = { "DDS MICRO-C Source Linker\n\
 /*
  * Add a string to the literal pool
  */
-char *add_pool(char *s)
+static char *add_pool(char *s)
 {
 	char *x;
 	x = sp_top;
-	while(*sp_top++ = *s++);
+	while((*sp_top++ = *s++))
+		;
 	return x;
 }
 
 /*
  * Add file(s) to a processing list
  */
-add_file(char *list[], unsigned *index, char *f)
+static void add_file(char *list[], int *index, char *f)
 {
 	FILE *fp;
 	char buffer[100], *ptr, c;
@@ -127,8 +140,8 @@ new:
 		while(((c = *f) != ',') && *f) ++f;
 		*f++ = 0;
 		if(!(fp = fopen(ptr, "r"))) {
-			text_error("Cannot open", ptr);
-			exit(-1); }
+			perror(ptr);
+			exit(1); }
 		while(MC_fgets(ptr = buffer, sizeof(buffer), fp)) {
 			while(isspace(*ptr)) ++ptr;
 			if(*ptr)
@@ -151,8 +164,7 @@ new:
 /*
  * Open a file from the library
  */
-FILE *open_lib(fname)
-	char *fname;
+static FILE *open_lib(char const *fname)
 {
 	char *ptr, *ptr1, c;
 	FILE *fp;
@@ -163,13 +175,13 @@ FILE *open_lib(fname)
 		*ptr1++ = *ptr++;
 	*ptr1++ = DIRSEP;
 	ptr = ptr1;
-	while(c = *fname++) {
+	while((c = *fname++)) {
 		if((c == '\\') || (c == ':'))
 			fptr = ptr;
 		*ptr1++ = c; }
 	*ptr1 = 0;
 	if(!(fp = fopen(fptr, "r"))) {
-		text_error("Cannot open", fptr);
+		perror(fptr);
 		++err_count; }
 	return fp;
 }
@@ -177,9 +189,7 @@ FILE *open_lib(fname)
 /*
  * Main program, process files
  */
-main(argc, argv)
-	int argc;
-	char *argv[];
+int main(int argc, char *argv[])
 {
 	int i;
 	unsigned s;
@@ -243,12 +253,12 @@ main(argc, argv)
 		die(help_text);
 
 	if(!(segfp[0] = output_fp = fopen(ptr = cfiles[--cmd_count], "w"))) {
-		text_error("Cannot open", ptr);
-		exit(-1); }
+		perror(ptr);
+		exit(1); }
 
 /* Open the library index */
 	if(!(index_fp = open_lib(index_file)))
-		exit(-1);
+		exit(1);
 
 /* Process index file for fixed inputs */
 	process_index();
@@ -257,32 +267,32 @@ main(argc, argv)
 	for(i = 0; i < pre_count; ++i) {
 		ptr = pfiles[i];
 		if(lstlib)
-			text_error("Including Prefix ", ptr);
-		if(file_fp = open_lib(ptr))
+			fprintf(stderr,"Including Prefix %s\n", ptr);
+		if((file_fp = open_lib(ptr)))
 			process_file(file_fp); }
 
 /* Process the users input files */
 	for(i=0; i < cmd_count; ++i) {
-		if(input_fp = fopen(fptr = cfiles[i], "r"))
+		if((input_fp = fopen(fptr = cfiles[i], "r")))
 			process_file(input_fp);
 		else {
-			text_error("Cannot open", fptr);
+			perror(fptr);
 			++err_count; } }
 
 /* Process any library files */
 	for(i = 0; i < lib_count; ++i) {
 		ptr = lfiles[i];
 		if(lstlib)
-			text_error("Including Library", ptr);
-		if(file_fp = open_lib(ptr))
+			fprintf(stderr,"Including Library %s\n", ptr);
+		if((file_fp = open_lib(ptr)))
 			process_file(file_fp); }
 
 /* Process any middle files */
 	for(i = 0; i < mid_count; ++i) {
 		ptr = mfiles[i];
 		if(lstlib)
-			text_error("Including Middle ", ptr);
-		if(file_fp = open_lib(ptr))
+			fprintf(stderr,"Including Middle %s\n", ptr);
+		if((file_fp = open_lib(ptr)))
 			process_file(file_fp); }
 
 /* Reserve allocated memory areas */
@@ -310,8 +320,8 @@ main(argc, argv)
 	for(i=0; i < suf_count; ++i) {
 		ptr = sfiles[i];
 		if(lstlib)
-			text_error("Including Suffix ", ptr);
-		if(file_fp = open_lib(ptr))
+			fprintf(stderr,"Including Suffix %s\n", ptr);
+		if((file_fp = open_lib(ptr)))
 			process_file(file_fp); }
 
 	flush_segment();
@@ -324,36 +334,36 @@ main(argc, argv)
 /*
  * Process index file, looking for initials
  */
-process_index()
+static void process_index(void)
 {
 	char buffer[LINESIZ+1], filelist[LINESIZ];
 
 	while(MC_fgets(buffer, LINESIZ, index_fp)) switch(*buffer) {
 		case '<' :		/* Prefix files */
 			if(skipstart) {
-				strcpy(lptr = filelist, &buffer[1]);
+				safestrcpy(lptr = filelist, sizeof(filelist), &buffer[1]);
 				while(parse(buffer))
 					pfiles[pre_count++] = add_pool(buffer); }
 			skipstart = -1;
 			break;
 		case '^' :		/* Middle file */
-			strcpy(lptr = filelist, &buffer[1]);
+			safestrcpy(lptr = filelist, sizeof(filelist), &buffer[1]);
 			while(parse(buffer))
 				mfiles[mid_count++] = add_pool(buffer);
 			break;
 		case '>' :		/* Suffix files */
-			strcpy(lptr = filelist, &buffer[1]);
+			safestrcpy(lptr = filelist, sizeof(filelist), &buffer[1]);
 			while(parse(buffer))
 				sfiles[suf_count++] = add_pool(buffer);
 			break;
 		case '$' :		/* Allocation directive */
-			strcpy(allocate, &buffer[1]); }
+			safestrcpy(allocate, sizeof(allocate), &buffer[1]); }
 }
 
 /*
  * Check for buffer match
  */
-check_file(char *f)
+static bool check_file(char *f)
 {
 	char *p, c, flag;
 
@@ -373,11 +383,11 @@ check_file(char *f)
  * Read a file and process any external references in it,
  * also, patch any local symbols (?n) to be unique.
  */
-process_file(fp)
-	FILE *fp;
+static void process_file(FILE *fp)
 {
 	unsigned output_enable;
-	char c, buffer[LINESIZ+1], *ptr;
+	char buffer[LINESIZ+1], *ptr;
+	int c;
 
 	output_fp = segfp[0];		/* Always begin with seg 0 */
 	output_enable = -1;
@@ -411,7 +421,7 @@ process_file(fp)
 					active_libs |= get_number(buffer+4);
 					continue;
 				case ('R'<<8)|'S' :		/* Runtime library Section */
-					if(output_enable = get_number(buffer+4))
+					if((output_enable = get_number(buffer+4)))
 						output_enable &= active_libs;
 					else
 						output_enable = -1;
@@ -446,7 +456,7 @@ process_file(fp)
 						goto nofile; }
 				goto put0; }
 		nofile:
-			while(c = *ptr++) {
+			while((c = *ptr++)) {
 				putc(c, output_fp);
 				if((c == prefix) && isdigit(*ptr)) {	/* Local label */
 					putc(out_count/26 + 'A', output_fp);
@@ -459,8 +469,7 @@ process_file(fp)
 /*
  * Reserve an unitinialized data area
  */
-reserve_data(symbol)
-	char *symbol;
+static void reserve_data(char *symbol)
 {
 	char *ptr;
 
@@ -484,8 +493,7 @@ reserve_data(symbol)
 /*
  * Get a number from the input stream
  */
-get_number(ptr)
-	char *ptr;
+static unsigned int get_number(char const *ptr)
 {
 	unsigned value, base, c;
 	char mflag;
@@ -520,8 +528,7 @@ get_number(ptr)
 /*
  * Lookup an external filename
  */
-lookup(symbol)
-	char *symbol;
+static void lookup(char *symbol)
 {
 	int i;
 	char buffer[LINESIZ+1], filelist[LINESIZ], *ptr, flag;
@@ -542,17 +549,18 @@ lookup(symbol)
 #ifdef DEMO
 		fputs(demo_text, stderr);
 #endif
-		text_error("Severe error", "Symbol table exausted");
-		exit(-1); }
+		fprintf(stderr,"Severe error: Symbol table exausted\n");
+		exit(1); }
 
-	strcpy(symbols[sym_count++], symbol);
+	safestrcpy(symbols[sym_count++], SYMSIZE+1,symbol);
 
 	/* Look it up in the index file */
 	rewind(index_fp);
 
 	while(MC_fgets(buffer, LINESIZ, index_fp)) switch(*buffer) {
 		case '-' :		/* Library filename entry */
-			strcpy(filelist, &buffer[1]);
+			safestrcpy(filelist, sizeof(filelist), &buffer[1]);
+			break;
 		case '<' :		/* Prefix filename */
 		case '^' :		/* Middle filename */
 		case '>' :		/* Suffix filename */
@@ -572,8 +580,8 @@ lookup(symbol)
 #ifdef DEMO
 								fputs(demo_text, stderr);
 #endif
-								text_error("Severe error", "Library index full");
-								exit(-1); }
+								fprintf(stderr,"Severe error: Library index full\n");
+								exit(1); }
 							lfiles[lib_count++] = add_pool(buffer); } } }
 				return; } }
 }
@@ -581,8 +589,7 @@ lookup(symbol)
 /*
  * Select a new output segment
  */
-select_segment(s)
-	unsigned s;
+static void select_segment(unsigned int s)
 {
 	char fname[65], *ptr, *ptr1;
 
@@ -603,7 +610,7 @@ select_segment(s)
 /*
  * Flush the output segments
  */
-flush_segment()
+static void flush_segment(void)
 {
 	int s;
 	char fname[65], buffer[LINESIZ+1], *ptr, *ptr1;
@@ -630,8 +637,7 @@ flush_segment()
 /*
  * Parse of next name from file list
  */
-parse(dest)
-	char *dest;
+static int parse(char *dest)
 {
 	while(isspace(*lptr))
 		++lptr;
@@ -644,23 +650,9 @@ parse(dest)
 }
 
 /*
- * Display an error message with text
- */
-text_error(message, text)
-	char *message, *text;
-{
-	fputs(message, stderr);
-	fputs(": '", stderr);
-	fputs(text, stderr);
-	fputs("'\n", stderr);
-}
-
-/*
  * Write a number to file
  */
-fputn(value, fp)
-	unsigned value;
-	FILE *fp;
+static void fputn(unsigned int value, FILE *fp)
 {
 	char stack[6];
 	unsigned i;

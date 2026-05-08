@@ -4,6 +4,7 @@
  * ?COPY.TXT 1983-2005 Dave Dunfield
  * **See COPY.TXT**.
  */
+#include <stdbool.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -24,7 +25,9 @@
 #define	DEBUGIF(a)			/* Debug "if" statements */
 #define DEBUG(a)			/* General debugging */
 
-unsigned
+extern char *safestrcpy(char [],size_t,char const *);
+
+static unsigned
 	Da, Mo, Yr, Hr, Mi, Se,
 	msnum,
 	minum,
@@ -32,12 +35,12 @@ unsigned
 	ifnest,
 	cur_line,
 	desize;
-FILE
+static FILE
 	*fp,
 	*ofp;		/* current file pointer */
-unsigned char
+static char
 	*input_ptr;			/* expression parser input (was unsigned*) */
-unsigned char
+static char
 	*macsub[NUMSMACS], *macins[NUMIMACS], *macend[NUMIMACS],
 	buffer[MACSPACE],
 	*deptr,
@@ -55,38 +58,36 @@ unsigned char
 //struct time todays_time;
 //struct date todays_date;
 
-static unsigned char *cmds[] = {
+static char *cmds[] = {
 	"SET", "IFEQ", "IFNE", "IF", "ELSE", "ENDIF", "INCLUDE", "MACRO",
 	"ENDMAC", "ABORT", "PREFIX", "ESET",
 	0 };
 
-static unsigned char *months[] = {
+static char *months[] = {
 	"---", "January", "February", "March", "April", "May", "June",
 	"July", "August", "September", "October", "November", "December" };
 
 /* Forward declarations — required before first call site on 64-bit */
-unsigned char *process_line(unsigned char *, unsigned char *);
-void read_file(unsigned char *);
-unsigned char *skip_blank(unsigned char *);
-unsigned char *skip_parm(unsigned, unsigned char *);
-unsigned char *extract_parm(unsigned char *, unsigned char *);
-void set_symbol(unsigned char *, unsigned char *);
-void macro_sub(unsigned char *);
-int parms_equal(unsigned char *);
-void check_free(void);
-void quit(unsigned char *);
-unsigned get_value(void);
-unsigned expression(void);
-int isend(unsigned char);
-int issymbol(unsigned char);
+static char *process_line(char *, char *);
+static void read_file(char *);
+static char *skip_blank(char *);
+static char *skip_parm(unsigned, char *);
+static char *extract_parm(char *, char *);
+static void set_symbol(char *, char *);
+static void macro_sub(char *);
+static int parms_equal(char *);
+static void check_free(void);
+static void quit(char *);
+static unsigned get_value(void);
+static unsigned expression(void);
+static bool isend(char);
+static bool issymbol(char);
 
-main(argc, argv)
-	int argc;
-	char *argv[];
+int main(int argc, char *argv[])
 {
-	unsigned i, count, n, j;
-	unsigned char c, *ptr, *files[MAXFILES], *nptr;
-	unsigned char sym[100];
+	unsigned count, n, j;
+	char c, *ptr, *files[MAXFILES], *nptr;
+	char sym[100];
 	count = 0;
 
 	if(argc < 2)
@@ -97,19 +98,19 @@ main(argc, argv)
 	  Hr = _tm->tm_hour; Mi = _tm->tm_min;  Se = _tm->tm_sec; }
 
 	ofp = stdout;
-	for(i=1; i < argc; ++i) {
+	for(int i=1; i < argc; ++i) {
 		switch(*(ptr = argv[i])) {
 		case '>' :
 			if(!(ofp = fopen(ptr+1, "w"))) {
 				fprintf(stderr,"Unable to write: '%s'\n", ptr+1);
-				exit(-1); }
+				return 1; }
 			continue;
 		case '-' :
 			switch(toupper(*(ptr+1))) {
 			case 'L' : adjline = -1;		continue;
 			case 'P' : prefix = *(ptr+2);	continue;
 			} fprintf(stderr,"Invalid option: %s\n", ptr);
-			exit(-1); }
+			return 1; }
 		nptr = ptr;
 		while(issymbol(c = *nptr))
 			++nptr;
@@ -124,29 +125,28 @@ main(argc, argv)
 		else					/* process input file */
 			files[count++] = argv[i]; }
 
-	for(i=0; i < count; ++i)
+	for(unsigned int i=0; i < count; ++i)
 		read_file(files[i]);
 
 	return 0;
 }
 
-void read_file(fname)
-	unsigned char *fname;
+static void read_file(char *fname)
 {
 	unsigned savline;
 	FILE *savfp;
-	unsigned char savfile[65];
+	char savfile[65];
 
 /* save file related info */
 	savfp = fp;				/* save current file pointer*/
-	strcpy(savfile, cur_file);
+	safestrcpy(savfile, sizeof(savfile), cur_file);
 	savline	= cur_line;		/* save current line number */
 	cur_line = 0;
-	strcpy(cur_file, fname);
+	safestrcpy(cur_file, sizeof(cur_file), fname);
 
 	if(!(fp = fopen(fname,"r"))) {
 		fprintf(stderr,"Unable to access: '%s'\n", fname);
-		exit(-1); }
+		exit(1); }
 
 	while(fgets(linbuf, LINSIZE, fp)) {
 		++cur_line;
@@ -154,15 +154,14 @@ void read_file(fname)
 
 	fclose(fp);
 	cur_line = savline;			/* restore current line number */
-	strcpy(cur_file, savfile);	/* Restore current file name */
+	safestrcpy(cur_file, sizeof(cur_file), savfile);	/* Restore current file name */
 	fp = savfp;					/* restore current file pointer */
 }
 
-unsigned char *process_line(linebuf, mptr)
-	unsigned char *linebuf, *mptr;
+static char *process_line(char *linebuf, char *mptr)
 {
 	unsigned i, temp, mnum;
-	unsigned char chr, *linptr, *outptr, *macptr, *parptr, outbuf[LINSIZE];
+	char chr, *linptr, *outptr, *macptr, *parptr, outbuf[LINSIZE];
 
 	if((*linebuf == '*') || (*linebuf == ';')) { /* comment line is ignored */
 		fputs(linebuf, ofp);
@@ -193,7 +192,8 @@ unsigned char *process_line(linebuf, mptr)
 		case 11 :				/* ESET command */
 			extract_parm(linptr, instr);
 			input_ptr = skip_parm(1, linptr);
-			sprintf(linptr, instr, expression());
+			snprintf(linptr, LINSIZE, instr, expression());
+			break;
 		case 0 :				/* set command */
 			set_symbol(lable, linptr);
 			break;
@@ -310,9 +310,11 @@ DEBUGIF(("ENDIF %u\n", ifnest))
 			break;
 		case 8 :				/* ENDMAC command */
 			quit("ENDMAC without MACRO");
+			break;
 		case 9 :				/* ABORT command */
 			extract_parm(linptr, instr);
 			quit(instr);
+			break;
 		case 10 :				/* PREFIX command */
 			prefix = *linptr;
 			break;
@@ -324,7 +326,7 @@ DEBUGIF(("ENDIF %u\n", ifnest))
 					while(*macptr++);				/* advance to first line */
 					do {
 						outptr = outbuf;
-						while(chr=*macptr++) {
+						while((chr=*macptr++)) {
 							if(chr != '\\')
 								*outptr++ = chr;
 							else if((chr=*macptr++) == '\\')
@@ -347,10 +349,10 @@ DEBUGIF(("ENDIF %u\n", ifnest))
 										while('"'!=*parptr++); }
 write_num:						sptr = 0;
 								do
-									stack[sptr++] = '0' + (temp % 10);
-								while(temp = temp / 10);
+									stack[(unsigned int)(sptr++)] = '0' + (temp % 10);
+								while((temp = temp / 10));
 								while(sptr)
-									*outptr++ = stack[--sptr]; }
+									*outptr++ = stack[(unsigned int)(--sptr)]; }
 							else if(chr == '.') {
 								temp = cur_line;
 								goto write_num; }
@@ -410,39 +412,34 @@ write_two:								if(temp < 10)
 						fprintf(ofp, " line %u\n", cur_line-1);
 					need_line = 0; }
 				fputs(linebuf, ofp);
-				putc('\n', ofp);
+				//putc('\n', ofp);
 				return mptr;} } }
 	need_line = -1;
 	return mptr;
 }
 
 /* determine if character in a terminator char */
-int isend(chr)
-	unsigned char chr;
+static bool isend(char chr)
 {
 	return (chr==' ') | (chr==0) | (chr==9) | (chr==',')
 	     | (chr=='\n') | (chr=='\r');	/* fgets includes newline on Linux */
 }
 
 /* determine is char is alphanumeric */
-int issymbol(chr)
-	unsigned char chr;
+static bool issymbol(char chr)
 {
 	return isalpha(chr) | isdigit(chr) | (chr == '_');
 }
 
 /* skips blanks */
-unsigned char *skip_blank(linptr)
-	unsigned char *linptr;
+static char *skip_blank(char *linptr)
 {
 	while((*linptr==' ')||(*linptr==9)) ++linptr;
 	return linptr;
 }
 
 /* skips ahead to the n'th parameter */
-unsigned char *skip_parm(n,ptr)
-	unsigned n;
-	unsigned char *ptr;
+static char *skip_parm(unsigned int n,char *ptr)
 {
 	while(n) {
 		if(*ptr == '"') {
@@ -454,11 +451,10 @@ unsigned char *skip_parm(n,ptr)
 }
 
 /* set the value for a symbol */
-void set_symbol(symbol, value)
-	unsigned char *symbol, *value;
+static void set_symbol(char *symbol, char *value)
 {
 	unsigned i;
-	unsigned char *ptr, *ptr1;
+	char *ptr, *ptr1;
 
 	if(isend(*symbol))
 		quit("Invalid SET symbol");
@@ -486,18 +482,17 @@ void set_symbol(symbol, value)
 	if(msnum >= NUMSMACS)
 		quit("Set MACRO pool exausted");
 	macsub[msnum++] = freptr;
-	while(*freptr++ = *symbol++);
+	while((*freptr++ = *symbol++));
 	freptr = extract_parm(value, freptr);
 	++freptr;
 	check_free();
 }
 
 /* perform macro substution */
-void macro_sub(ptr)
-	unsigned char *ptr;
+static void macro_sub(char *ptr)
 {
     unsigned i;
-	unsigned char chr, flag, *outptr, *savptr, *tmptr, *txtptr, outbuf[LINSIZE];
+	char chr, flag, *outptr, *savptr, *tmptr, *txtptr, outbuf[LINSIZE];
 
 	outptr = outbuf;
 	savptr = ptr;
@@ -515,7 +510,7 @@ again:
 					++tmptr; }
 				if((!*txtptr) && (!issymbol(*tmptr))) {	/* substitution occurs */
 					ptr = tmptr;						/* pass substuted text */
-					while(chr=*++txtptr) *outptr++ = chr;
+					while((chr=*++txtptr)) *outptr++ = chr;
 					flag = -1;
 					goto again; } }
 			while(issymbol(*ptr))
@@ -526,11 +521,10 @@ again:
 	if(flag) {
 		*outptr++ = 0;
 		outptr = outbuf;
-		while(*savptr++ = *outptr++); }
+		while((*savptr++ = *outptr++)); }
 }
 
-unsigned char *extract_parm(ptr,dest)
-	unsigned char *ptr, *dest;
+static char *extract_parm(char *ptr,char *dest)
 {
 	if(*ptr=='"') {
 		++ptr;
@@ -541,8 +535,7 @@ unsigned char *extract_parm(ptr,dest)
 	return dest;
 }
 
-int parms_equal(ptr)
-	unsigned char *ptr;
+static int parms_equal(char *ptr)
 {
 	extract_parm(ptr, instr);
 	ptr = skip_parm(1,ptr);
@@ -551,27 +544,26 @@ int parms_equal(ptr)
 	return !strcmp(instr, lable);
 }
 
-void check_free()
+static void check_free(void)
 {
 	if((buffer+sizeof(buffer)) <= freptr)
 		quit("MACRO storage pool exausted");
 }
 
-void quit(string)
-	unsigned char *string;
+static void quit(char *string)
 {
 	fprintf(stderr,"MACRO: Error in file '%s', line %u : %s\n",
 		cur_file, cur_line, string);
-	exit(-1);
+	exit(1);
 }
 
 /*
  * Get a numerical data value from the input stream
  */
-unsigned get_value()
+static unsigned get_value(void)
 {
 	unsigned num, b, i;
-	unsigned char x[17], *ptr, c;
+	char x[17], *ptr, c;
 
 	num = i = 0;
 	input_ptr = skip_blank(input_ptr);
@@ -597,7 +589,7 @@ DEBUG(("GET_VALUE: %s\n", input_ptr))
 			if(!i)
 				quit("Invalid numeric constant");
 			for(ptr = x; i; --i) {
-				if((c = *ptr++ - '0') >= b)
+				if((unsigned)(c = *ptr++ - '0') >= b)
 					quit("Invalid numeric constant");
 				num = (num * b) + c; }
 		return num; }
@@ -614,12 +606,13 @@ DEBUG(("GET_VALUE: %s\n", input_ptr))
 			++input_ptr;
 			return num; }
 	quit("Invalid constant in expression");
+	return 0; /* shut up compiler warning */
 }
 
 /*
  * Process a numerical expression in the input stream.
  */
-unsigned expression()
+static unsigned expression(void)
 {
 	unsigned value;
 
@@ -669,8 +662,12 @@ DEBUG(("Expression: %s\n", input_ptr))
 			case '!' :
 				if(*input_ptr++ == '=') {
 					value = value != get_value();
-					break; }
+				}
+				break;
 			default:
 			error:
-				quit("Invalid operator in expression"); } }
+				quit("Invalid operator in expression");
+				break;
+		}
+	}
 }

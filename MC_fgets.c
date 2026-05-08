@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-char *MC_fgets(char *dest,size_t size,FILE *fp)
+char *MC_fgets(char dest[],size_t size,FILE *fp)
 {
   char *ptr = dest;
   
