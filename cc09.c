@@ -13,7 +13,6 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include "microc.h"
 
 /* Dunfield getenv(name, buf) -> POSIX getenv() returning into buf */
 static int mc_getenv(char *name, char *buf) {
@@ -260,7 +259,7 @@ erase(file)
 	char *file;
 {
 	if(del)
-		delete(file);
+		remove(file);
 }
 
 /*

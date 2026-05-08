@@ -35,7 +35,7 @@ PREFIX    ?= /usr/local
 USIM09    ?= $(shell which usim09 2>/dev/null || echo ./usim09)
 
 CC        = gcc
-CFLAGS    = -std=gnu89 \
+CFLAGS    = -std=gnu99 \
             -Wno-implicit-int \
             -Wno-implicit-function-declaration \
             -Wno-pointer-sign \
@@ -82,35 +82,29 @@ usim09-target: targets/usim09/lib09/EXTINDEX.LIB
 
 # ── build ──────────────────────────────────────────────────────────────────
 
-mcc09: compile.c io.c 6809cg.c compile.h tokens.h portab.h
-	$(CC) $(CFLAGS) -DCPU=6809 -o $@ compile.c io.c 6809cg.c
+mcc09    : mcc09.o compile.o 6809cg.o
+asm09    : asm09.o
+mco09    : mco09.o
+cc09     : cc09.o
+slink    : slink.o MC_fgets.o
+slib     : slib.o MC_fgets.o strbeg.o
+sindex   : sindex.o MC_fgets.o
+sconvert : sconvert.o MC_fgets.o strbeg.o
+mcp      : mcp.o MC_fgets.o
+macro    : macro.o
 
-asm09: asm09.c xasm.h portab.h
-	$(CC) $(CFLAGS) -o $@ asm09.c
-
-mco09: mco.c 6809.mco microc.h
-	$(CC) $(CFLAGS) -DCPU=6809 -o $@ mco.c
-
-slink: slink.c microc.h
-	$(CC) $(CFLAGS) -o $@ slink.c
-
-slib: slib.c microc.h
-	$(CC) $(CFLAGS) -o $@ slib.c
-
-sindex: sindex.c microc.h
-	$(CC) $(CFLAGS) -o $@ sindex.c
-
-sconvert: sconvert.c microc.h
-	$(CC) $(CFLAGS) -o $@ sconvert.c
-
-cc09: cc09.c microc.h
-	$(CC) $(CFLAGS) -o $@ cc09.c
-
-mcp: mcp.c microc.h
-	$(CC) $(CFLAGS) -o $@ mcp.c
-
-macro: macro.c xasm.h portab.h
-	$(CC) $(CFLAGS) -o $@ macro.c
+mcc09.o    : portab.h compile.h
+mcc09.o    : override CFLAGS += -DCPU=6809
+asm09.o    : portab.h xasm.h
+mco09.o    : portab.h 6809.mco
+mco09.o    : override CFLAGS += -DCPU=6809
+slink.o    : portab.h
+slib.o     : portab.h
+sindex.o   : portab.h
+sconvert.o : portab.h
+macro.o    : portab.h xasm.h
+compile.o  : compile.h tokens.h
+6809cg.o   : portab.h compile.h
 
 # ── test suite (usim09) ────────────────────────────────────────────────────
 # Compiles each tests/t*.c with cc09 against the usim09 target and runs the

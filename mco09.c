@@ -14,8 +14,8 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include "microc.h"
 
+#include "portab.h"
 #include "6809.mco"			/* Processor specific optimization table */
 
 #define	PEEP_SIZE	15		/* size of peephole buffer */
@@ -204,18 +204,18 @@ main(argc, argv)
 #ifdef OPT_LEVEL
 			case ('o'<<8)|'=' :			/* Optimization level */
 				if((opt_level = atoi(ptr)) > OPT_LEVEL)
-					abort("Bad o= value\n");
+					die("Bad o= value\n");
 				break;
 #endif
 			default:
 				if(!input_fp) {			/* Input file */
 					if(!(input_fp = fopen(argv[i], "r")))
-						abort("Cannot open input file\n"); }
+						die("Cannot open input file\n"); }
 				else if(!output_fp) {	/* Output file */
 					if(!(output_fp = fopen(argv[i], "w")))
-						abort("Cannot open output file\n"); }
+						die("Cannot open output file\n"); }
 				else
-					abort("Too many parameters\n"); } }
+					die("Too many parameters\n"); } }
 
 #ifdef OPT_LEVEL
 	/* Process the optimizer table, and select cases by level */

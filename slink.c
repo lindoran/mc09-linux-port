@@ -19,7 +19,9 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include "microc.h"
+#include "portab.h"
+
+extern char *MC_fgets(char *,size_t,FILE *);
 
 /* Fixed parameters */
 #define	NUM_SEG	10			/* Maximum number of segments */
@@ -127,7 +129,7 @@ new:
 		if(!(fp = fopen(ptr, "r"))) {
 			text_error("Cannot open", ptr);
 			exit(-1); }
-		while(fgets(ptr = buffer, sizeof(buffer), fp)) {
+		while(MC_fgets(ptr = buffer, sizeof(buffer), fp)) {
 			while(isspace(*ptr)) ++ptr;
 			if(*ptr)
 				list[(*index)++] = add_pool(ptr); }
@@ -238,7 +240,7 @@ main(argc, argv)
 		fputs(hello, stderr);
 
 	if(cmd_count < 2)
-		abort(help_text);
+		die(help_text);
 
 	if(!(segfp[0] = output_fp = fopen(ptr = cfiles[--cmd_count], "w"))) {
 		text_error("Cannot open", ptr);
@@ -326,7 +328,7 @@ process_index()
 {
 	char buffer[LINESIZ+1], filelist[LINESIZ];
 
-	while(fgets(buffer, LINESIZ, index_fp)) switch(*buffer) {
+	while(MC_fgets(buffer, LINESIZ, index_fp)) switch(*buffer) {
 		case '<' :		/* Prefix files */
 			if(skipstart) {
 				strcpy(lptr = filelist, &buffer[1]);
@@ -390,7 +392,7 @@ process_file(fp)
 		fputs(fptr, output_fp);
 		putc('\n', output_fp); }
 
-	while(fgets(buffer, LINESIZ, fp)) {
+	while(MC_fgets(buffer, LINESIZ, fp)) {
 		if((buffer[0] == '$') && (buffer[3] == ':'))
 			switch((toupper(buffer[1]) << 8)|toupper(buffer[2])) {
 				case ('E'<<8)|'X' :		/* External definition */
@@ -548,7 +550,7 @@ lookup(symbol)
 	/* Look it up in the index file */
 	rewind(index_fp);
 
-	while(fgets(buffer, LINESIZ, index_fp)) switch(*buffer) {
+	while(MC_fgets(buffer, LINESIZ, index_fp)) switch(*buffer) {
 		case '-' :		/* Library filename entry */
 			strcpy(filelist, &buffer[1]);
 		case '<' :		/* Prefix filename */
@@ -585,7 +587,7 @@ select_segment(s)
 	char fname[65], *ptr, *ptr1;
 
 	if(s >= NUM_SEG)
-		abort("Invalid $SE directive");
+		die("Invalid $SE directive");
 
 	if(!segfp[s]) {
 		ptr = fname; ptr1 = tmp;
@@ -593,7 +595,7 @@ select_segment(s)
 		*ptr++ = s + '0';
 		*ptr = 0;
 		if(!(segfp[s] = fopen(fname, "w")))
-			abort("Cannot WRITE segment file"); }
+			die("Cannot WRITE segment file"); }
 
 	output_fp = segfp[s];
 }
@@ -616,12 +618,12 @@ flush_segment()
 			*ptr++ = s + '0';
 			*ptr = 0;
 			if(!(fp = fopen(fname, "r")))
-				abort("Cannot READ segment file");
-			while(fgets(buffer, LINESIZ, fp)) {
+				die("Cannot READ segment file");
+			while(MC_fgets(buffer, LINESIZ, fp)) {
 				fputs(buffer, output_fp);
 				putc('\n', output_fp); }
 			fclose(fp);
-			delete(fname);
+			remove(fname);
 			segfp[s] = 0; }
 }
 

@@ -16,7 +16,9 @@
 #include <string.h>
 #include <ctype.h>
 #include <glob.h>
-#include "microc.h"
+#include "portab.h"
+
+extern char *MC_fgets(char *,size_t,FILE *);
 
 #define	LINESIZ		100		/* Maximum size of input line */
 #define	FILESIZ		12		/* Maximum size of file name */
@@ -39,7 +41,7 @@ main(argc, argv)
 		else pattern = _a; }
 
 	if(!argc)
-		abort("\nUse SINDEX [filespec i=index]\n");
+		die("\nUse SINDEX [filespec i=index]\n");
 
 	{ glob_t gl; int gi;
 	  if(glob(pattern, 0, 0, &gl) || !gl.gl_pathc) {
@@ -53,7 +55,7 @@ main(argc, argv)
 			putc('-', index_fp);
 			fputs(gname, index_fp);
 			putc('\n', index_fp);
-			while(fgets(ptr = buffer, LINESIZ, fp)) {
+			while(MC_fgets(ptr = buffer, LINESIZ, fp)) {
 				if(!strncmp(buffer, "$DD:", 4)) ptr += 4;
 				if(isalpha(*ptr) || (*ptr == '_')) {
 					ptr1 = ptr;

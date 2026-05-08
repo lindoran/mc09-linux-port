@@ -90,7 +90,7 @@ main(argc, argv)
 	count = 0;
 
 	if(argc < 2)
-		abort("\nUse: macro [source files* symbol=value* -L -Pprefix] >outputfile\n\n?COPY.TXT 1983-2005 Dave Dunfield\n**See COPY.TXT**.\n");
+		die("\nUse: macro [source files* symbol=value* -L -Pprefix] >outputfile\n\n?COPY.TXT 1983-2005 Dave Dunfield\n**See COPY.TXT**.\n");
 
 	{ time_t _t = time(0); struct tm *_tm = localtime(&_t);
 	  Da = _tm->tm_mday; Mo = _tm->tm_mon+1; Yr = _tm->tm_year+1900;

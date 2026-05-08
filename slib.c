@@ -13,11 +13,15 @@
  * Compile command: cc slib -fop
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "microc.h"
+#include "portab.h"
+
+extern char *MC_fgets(char *,size_t,FILE *);
+extern bool  strbeg(char const *restrict,char const *restrict);
 
 #define	SYMSIZE	15		/* Maximum length of a symbol name */
 #define	MAXSYM	2500	/* Maximum number of symbols */
@@ -76,7 +80,7 @@ main(argc, argv)
 		fputs("DDS MICRO-C Source Librarian\n?COPY.TXT 1991-2005 Dave Dunfield\n**See COPY.TXT**.\n", stderr);
 
 	if(!argc)
-		abort(htext);
+		die(htext);
 
 	copy_file(filename, ".LIB");	/* Insure its uppercase */
 	read_index(filename);			/* Read in the current description */
@@ -188,7 +192,7 @@ proceed(prompt)
 
 	for(;;) {
 		printf("%s (Y/N)? ", prompt);
-		fgets(optr = buffer, sizeof(buffer), stdin);
+		MC_fgets(optr = buffer, sizeof(buffer), stdin);
 		switch(toupper(skip_blanks())) {
 			case 'Y' : return -1;
 			case 'N' : return 0; } }
@@ -214,7 +218,7 @@ add_file(type)
 	stype[stop++] = type;
 	if(verbose) printf("Adding '%s'.\n", snames[otop]);
 
-	while(fgets(optr = buffer, sizeof(buffer), fp)) {
+	while(MC_fgets(optr = buffer, sizeof(buffer), fp)) {
 		if(strbeg(buffer, "$EX:")) {
 			stype[stop] = EXTERN;
 			optr += 4;
@@ -305,7 +309,7 @@ read_index(file)
 	fp = fopen(file, "r");
 
 	stop = pptr = 0;
-	while(fgets(optr = buffer, sizeof(buffer), fp)) switch(*optr) {
+	while(MC_fgets(optr = buffer, sizeof(buffer), fp)) switch(*optr) {
 		case '$' :		/* Uninitialized data */
 			strcpy(udata, optr+1);
 			break;
@@ -351,7 +355,7 @@ get_externs(file)
 	FILE *fp;
 
 	if(fp = fopen(file, "r")) {
-		while(fgets(buffer, sizeof(buffer), fp)) {
+		while(MC_fgets(buffer, sizeof(buffer), fp)) {
 			if(strbeg(buffer, "$EX:")) {
 				++ecount;
 				ptr1 = buffer+4;

@@ -45,39 +45,3 @@
 	#define xabort(msg)
 	#define	xhex(c)
 #endif
-
-/*
- * Get a line of input from a file, and return it as a NULL
- * terminated string WITHOUT a trailing newline character.
- */
-char *MC_fgets(buffer, max_len, fp)
-	char *buffer;
-	int max_len;
-	FILE *fp;
-{
-	register int i, c;
-	register char *ptr;
-
-	i = 0;
-	ptr = buffer;
-	while(i < max_len) {
-		if((c = getc(fp)) == -1) {
-#ifdef DEMO
-			demo_line = -1;
-#endif
-			break; }
-		if(c == '\n')
-			break;
-		if(c == '\r')   /* strip CR from CRLF source files */
-			continue;
-		*ptr++ = c;
-		++i;; }
-
-	*ptr = 0;
-
-#ifdef DEMO
-	if(++demo_line >= DEMO_LINES)
-		xabort("line");
-#endif
-	return ((c != '\n') && !i) ? 0 : buffer;
-}
