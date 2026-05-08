@@ -21,13 +21,12 @@
  * **See COPY.TXT**.
  */
 
+#include <stdbool.h>
+
 #ifndef LINE_SIZE
 #include "portab.h"
 #include "compile.h"
-
-extern char s_name[MAX_SYMBOL][SYMBOL_SIZE+1];
-extern unsigned s_type[], s_index[], s_dindex[], dim_pool[], global_top,
-	local_top, function_count;
+#include "6809cg.h"
 #endif
 
 unsigned stack_frame, stack_level, global_width = 0, global_set = 0;
@@ -38,10 +37,7 @@ char symbolic = 0;			/* Controls output of symbolic information */
 /*
  * Generate a call to a runtime library function.
  */
-char *runtime(string, type, order)
-	char *string;	/* name of library routine */
-	unsigned type;	/* type of access */
-	char order;		/* order is important flag */
+char *runtime(char *string, unsigned int type, char order)
 {
 	char *ptr, *ptr1;
 
@@ -68,8 +64,7 @@ char *runtime(string, type, order)
  * Write an operand value
  * flag: (0=16 bit, 1=first 8 bits, 2 = second 8 bits)
  */
-write_oper(token, value, type, flag)
-	unsigned token, value, type, flag;
+void write_oper(unsigned int token, unsigned int value, unsigned int type, unsigned int flag)
 {
 	int flag1;
 
@@ -130,21 +125,19 @@ write_oper(token, value, type, flag)
 /*
  * Determine if a type is a pointer to 16 bits
  */
-isp16(type)
-	unsigned type;
+bool isp16(unsigned int type)
 {
 	if(type & (POINTER-1))			/* pointer to pointer */
-		return 1;
+		return true;
 	if(type & POINTER)				/* first level pointer */
 		return !(type & BYTE);
-	return 0;						/* not a pointer */
+	return false;						/* not a pointer */
 }
 
 /*
  * Output text as comment in ASM source
  */
-do_comment(ptr)
-	char *ptr;
+void do_comment(char *ptr)
 {
 	if(global_width) {
 		out_nl();
@@ -157,8 +150,7 @@ do_comment(ptr)
 /*
  * Output a string to the assembler followed by newline.
  */
-do_asm(ptr)
-	char *ptr;
+void do_asm(char *ptr)
 {
 	out_str(ptr);
 	out_nl();
@@ -167,8 +159,7 @@ do_asm(ptr)
 /*
  * Release stack allocation
  */
-release_stack(size)
-	unsigned size;
+void release_stack(unsigned int size)
 {
 	stack_level -= size;
 }
@@ -176,12 +167,12 @@ release_stack(size)
 /*
  * Define beginning of module
  */
-def_module() { }	/* No operation required */
+void def_module(void) { }	/* No operation required */
 
 /*
  * End of module definition
  */
-end_module()
+void end_module(void)
 {
 	unsigned i;
 	if(symbolic) for(i=0; i < global_top; ++i) {
@@ -192,18 +183,16 @@ end_module()
 /*
  * Begin definition of a static global variable
  */
-def_static(symbol, ssize)
-	unsigned symbol;
+void def_static(unsigned int symbol,int ssize)
 {
+	(void)ssize;
 	out_symbol(symbol);
 }
 
 /*
  * Initialize static storage
  */
-init_static(token, value, word)
-	unsigned token, value;
-	char word;
+void init_static(unsigned int token, unsigned int value, char word)
 {
 	char *ptr;
 
@@ -238,7 +227,7 @@ init_static(token, value, word)
 /*
  * End static storage definition
  */
-end_static()
+void end_static(void)
 {
 	if(global_width)
 		out_nl();
@@ -252,8 +241,7 @@ end_static()
 /*
  * Define a global variable
  */
-def_global(symbol, size)
-	unsigned symbol, size;
+void def_global(unsigned int symbol, unsigned int size)
 {
 	/* Output the special comment used by SLINK */
 	out_str("$DD:");
@@ -273,8 +261,7 @@ def_global(symbol, size)
  * In this case, we will just generate a comment, which can
  * be used by the SLINK utility to key external references.
  */
-def_extern(symbol)
-	unsigned symbol;
+void def_extern(unsigned int symbol)
 {
 	out_str("$EX:");
 	out_symbol(symbol);
@@ -284,8 +271,7 @@ def_extern(symbol)
 /*
  * Enter function & allocate local variable stack space
  */
-def_func(symbol, size)
-	unsigned symbol, size;
+void def_func(unsigned int symbol, unsigned int size)
 {
 	if(symbolic) {
 		out_str("*#fun ");
@@ -297,7 +283,7 @@ def_func(symbol, size)
 		out_nl(); }
 
 	out_symbol(symbol);
-	if(stack_frame = size) {
+	if((stack_frame = size)) {
 		out_str(" LEAS -");
 		out_num(size);
 		do_asm(",S"); }
@@ -309,7 +295,7 @@ def_func(symbol, size)
 /*
  * Clean up the stack & end function definition
  */
-end_func()
+void end_func(void)
 {
 	unsigned i;
 
@@ -329,8 +315,7 @@ end_func()
 /*
  * Dump a symbol definition "magic comment" to the output file
  */
-dump_symbol(s)
-	unsigned s;
+void dump_symbol(unsigned int s)
 {
 	unsigned i, t;
 
@@ -344,6 +329,7 @@ dump_symbol(s)
 		case FUNCGOTO :
 			if(s < local_top)
 				goto dofunc;
+			break;
 		case STRUCTURE :
 			put_num(i, -1);
 			break;
@@ -362,8 +348,7 @@ dump_symbol(s)
 /*
  * Define a compiler generated label
  */
-def_label(label)
-	unsigned label;
+void def_label(unsigned int label)
 {
 	out_chr('?');
 	out_num(label);
@@ -373,9 +358,7 @@ def_label(label)
 /*
  * Define literal pool
  */
-def_literal(ptr, size)
-	unsigned char *ptr;
-	unsigned size;
+void def_literal(char *ptr, unsigned int size)
 {
 	unsigned i;
 
@@ -394,8 +377,7 @@ def_literal(ptr, size)
 /*
  * Call a function by name
  */
-call(token, value, type, clean)
-	unsigned token, value, type, clean;
+void call(unsigned int token, unsigned int value, unsigned int type, unsigned int clean)
 {
 	out_str(" JSR ");
 	switch(token) {
@@ -429,9 +411,7 @@ call(token, value, type, clean)
 /*
  * Unconditional jump to label
  */
-jump(label, ljmp)
-	unsigned label;		/* destination label */
-	char ljmp;			/* long jump required */
+void jump(unsigned label, bool ljmp)
 {
 	out_str(ljmp ? " JMP ?" : " BRA ?");
 	out_num(label);
@@ -441,10 +421,7 @@ jump(label, ljmp)
 /*
  * Conditional jump to label
  */
-jump_if(cond, label, ljmp)
-	char cond;			/* condition TRUE of FALSE */
-	unsigned label;		/* destination label */
-	char ljmp;			/* long jump required */
+void jump_if(char cond, unsigned int label, char ljmp)
 {
 	char *ptr;
 
@@ -465,8 +442,7 @@ jump_if(cond, label, ljmp)
 /*
  * Perform a switch operation
  */
-do_switch(label)
-	unsigned label;			/* address of switch table */
+void do_switch(unsigned int label)
 {
 	out_str(" LDU #?");
 	out_num(label);
@@ -476,8 +452,7 @@ do_switch(label)
 /*
  * Load index register with a pointer value
  */
-index_ptr(token, value, type)
-	unsigned token, value, type;
+void index_ptr(unsigned int token, unsigned int value, unsigned int type)
 {
 	if(token == IN_ACC)
 		out_inst("TFR D,U");
@@ -490,8 +465,7 @@ index_ptr(token, value, type)
 /*
  * Load index register with the address of an assignable object
  */
-index_adr(token, value, type)
-	unsigned token, value, type;
+void index_adr(unsigned int token, unsigned int value, unsigned int type)
 {
 	if(token == ION_STACK) {
 		out_inst("PULS U");
@@ -506,8 +480,7 @@ index_adr(token, value, type)
 /*
  * Expand 8 bit accumulator to 16 bits if necessary.
  */
-expand(type)
-	unsigned type;
+void expand(unsigned int type)
 {
 	if(last_byte) {
 		out_inst((type & UNSIGNED) ? zero_flag = -1, "CLRA" : "SEX");
@@ -525,7 +498,7 @@ expand(type)
  *
  * No instruction is emitted — B already holds the correct low 8 bits.
  */
-narrow_byte()
+void narrow_byte(void)
 {
 	last_byte = -1;
 }
@@ -533,8 +506,7 @@ narrow_byte()
 /*
  * Do a simple register operation
  */
-accop(oper, rtype)
-	unsigned oper, rtype;
+void accop(unsigned int oper, unsigned int rtype)
 {
 	char *ptr, byte, eflag, zflag;
 
@@ -615,8 +587,7 @@ accop(oper, rtype)
  * Perform an operation with the accumulator and
  * the specified value;
  */
-accval(oper, rtype, token, value, type)
-	unsigned oper, rtype, token, value, type;
+void accval(unsigned int oper, unsigned int rtype, unsigned int token, unsigned int value, unsigned int type)
 {
 	char *ptr, *ptr1, byte, rbyte, eflag, zflag;
 
@@ -777,8 +748,7 @@ accval(oper, rtype, token, value, type)
 /*
  * Output a symbol name
  */
-out_symbol(s)
-	unsigned s;
+void out_symbol(unsigned int s)
 {
 	if(s_type[s] & STATIC) {		/* Static, output local label */
 		out_chr('?');
@@ -789,8 +759,7 @@ out_symbol(s)
 /*
  * Write an instruction to the output file
  */
-out_inst(ptr)
-	char *ptr;
+void out_inst(char *ptr)
 {
 	put_chr(' ', -1);
 	put_str(ptr, -1);
@@ -800,8 +769,7 @@ out_inst(ptr)
 /*
  * Write a string to the output file
  */
-out_str(ptr)
-	char *ptr;
+void out_str(char *ptr)
 {
 	put_str(ptr, -1);
 }
@@ -809,8 +777,7 @@ out_str(ptr)
 /*
  * Write a signed number to the output file
  */
-out_num(value)
-	unsigned value;
+void out_num(unsigned int value)
 {
 	if(value & 0x8000) {
 		out_chr('-');
@@ -822,14 +789,13 @@ out_num(value)
 /*
  * Write newline/space characters to the output file.
  */
-out_nl() { put_chr('\n', -1); }
-out_sp() { put_chr(' ', -1); }
+void out_nl(void) { put_chr('\n', -1); }
+void out_sp(void) { put_chr(' ', -1); }
 
 /*
  * Write a character to the output file
  */
-out_chr(chr)
-	char chr;
+void out_chr(char chr)
 {
 	put_chr(chr, -1);
 }

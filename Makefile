@@ -34,14 +34,9 @@
 PREFIX    ?= /usr/local
 USIM09    ?= $(shell which usim09 2>/dev/null || echo ./usim09)
 
-CC        = gcc
-CFLAGS    = -std=gnu99 \
-            -Wno-implicit-int \
-            -Wno-implicit-function-declaration \
-            -Wno-pointer-sign \
-            -Wno-return-type \
-            -Wno-unused-function \
-            -I.
+CC        = gcc -std=c99 -pedantic
+CFLAGS    = -g -I. -Wall -Wextra
+LDFLAGS   = -g
 
 # Test filter — empty runs all suites; set to a prefix to run one:
 #   make test TEST=t06
@@ -85,19 +80,20 @@ usim09-target: targets/usim09/lib09/EXTINDEX.LIB
 mcc09    : mcc09.o compile.o 6809cg.o
 asm09    : asm09.o
 mco09    : mco09.o
-cc09     : cc09.o
-slink    : slink.o MC_fgets.o
-slib     : slib.o MC_fgets.o strbeg.o
+cc09     : cc09.o safestrcpy.o
+slink    : slink.o MC_fgets.o safestrcpy.o
+slib     : slib.o MC_fgets.o strbeg.o safestrcpy.o
 sindex   : sindex.o MC_fgets.o
 sconvert : sconvert.o MC_fgets.o strbeg.o
-mcp      : mcp.o MC_fgets.o
-macro    : macro.o
+mcp      : mcp.o MC_fgets.o safestrcpy.o
+macro    : macro.o safestrcpy.o
 
 mcc09.o    : portab.h compile.h
 mcc09.o    : override CFLAGS += -DCPU=6809
 asm09.o    : portab.h xasm.h
-mco09.o    : portab.h 6809.mco
+mco09.o    : portab.h 6809mco.h
 mco09.o    : override CFLAGS += -DCPU=6809
+cc09.o     : override CFLAGS += -Wno-format-truncation
 slink.o    : portab.h
 slib.o     : portab.h
 sindex.o   : portab.h

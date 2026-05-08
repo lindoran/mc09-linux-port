@@ -22,15 +22,10 @@
 
 #ifndef LINE_SIZE
 #include "compile.h"
-
-/* Variables in the COMPILE.C module */
-extern char line, comment, fold;	/* Command line switch flags */
-extern char file_name[];			/* Filename table */
-extern unsigned file_depth;			/* Include depth indicator */
 #endif
 
-FILE *fp_table[INCL_DEPTH+1] = { 0 }, *output_fp = 0;
-char quiet = 0;
+static FILE *fp_table[INCL_DEPTH+1] = { 0 }, *output_fp = 0;
+static char quiet = 0;
 
 /* Include search path: set by -I option or MCINCLUDE env var */
 static char include_path[FILE_SIZE] = "";
@@ -50,16 +45,14 @@ extern unsigned max_errors;			/* Max errors before forced abort */
 #define STRINGIFY_(x) #x
 #define STRINGIFY(x)  STRINGIFY_(x)
 
-char hello[] = { "DDS MICRO-C " STRINGIFY(CPU) " Compiler\n\
+static char hello[] = { "DDS MICRO-C " STRINGIFY(CPU) " Compiler\n\
 ?COPY.TXT 1988-2005 Dave Dunfield\n\
 **See COPY.TXT**.\n" };
 
 /*
  * Initialize I/O & execute compiler
  */
-main(argc, argv)
-	int argc;
-	char *argv[];
+int main(int argc, char *argv[])
 {
 	int i;
 	char *ptr;
@@ -95,9 +88,9 @@ main(argc, argv)
 				break;
 			case ('-'<<8)|'I' :		/* Include path (-Ipath or -I path) */
 				if(*ptr)
-					strncpy(include_path, ptr, sizeof(include_path)-1);
+					strncpy(include_path, ptr, sizeof(include_path)-1); // XXX
 				else if(i+1 < argc)
-					strncpy(include_path, argv[++i], sizeof(include_path)-1);
+					strncpy(include_path, argv[++i], sizeof(include_path)-1); // XXX
 				break;
 #ifdef MODEL
 			case ('m'<<8)|'=' :		/* memory model to use */
@@ -106,7 +99,7 @@ main(argc, argv)
 #endif
 			default:
 				if(!fp_table[0]) {		/* Input file */
-					copy_string(file_name, argv[i]);
+					//copy_string(file_name, argv[i]); // XXX - ???
 					if(!(fp_table[0] = fopen(argv[i], "r")))
 						severe_error("Cannot open input file"); }
 				else if(!output_fp) {	/* Output file */
@@ -130,23 +123,20 @@ main(argc, argv)
 /*
  * Terminate the compiler
  */
-terminate(rc)
-	int rc;
+void terminate(int rc)
 {
 	if(output_fp)
 		fclose(output_fp);
-	exit(rc ? -2 : 0);
+	exit(rc ? 2 : 0);
 }
 
 /*
  * Write a number to file
  */
-put_num(value, file)
-	unsigned value;
-	unsigned file;
+void put_num(unsigned int value, unsigned int file)
 {
 	char stack[12];		/* 10 digits covers UINT32_MAX; 12 for safety */
-	register unsigned i;
+	unsigned i;
 
 	i = 0;
 	do
@@ -161,9 +151,7 @@ put_num(value, file)
  * Write a string to device indicated by "file"
  * (0 = console, non-0 = output file)
  */
-put_str(ptr, file)
-	char *ptr;
-	unsigned file;
+void put_str(char *ptr, unsigned int file)
 {
 	while(*ptr)
 		put_chr(*ptr++, file);
@@ -179,8 +167,7 @@ put_str(ptr, file)
 /*
  * Stack previous input file & open a new one
  */
-f_open(name)
-	char *name;
+bool f_open(char *name)
 {
 	FILE *fp;
 	char clean[FILE_SIZE+1], fullpath[FILE_SIZE*2+2];
@@ -194,32 +181,32 @@ f_open(name)
 	*p = 0;
 
 	/* Try working directory first */
-	if (fp = fopen(clean, "r")) {
+	if ((fp = fopen(clean, "r"))) {
 		fp_table[file_depth+1] = fp;
-		return -1; }
+		return true; }
 
 	/* Try -I path */
 	if (include_path[0]) {
 		snprintf(fullpath, sizeof(fullpath), "%s/%s", include_path, clean);
-		if (fp = fopen(fullpath, "r")) {
+		if ((fp = fopen(fullpath, "r"))) {
 			fp_table[file_depth+1] = fp;
-			return -1; } }
+			return true; } }
 
 	/* Try MCINCLUDE environment variable */
 	{ char *env = getenv("MCINCLUDE");
 	  if (env) {
 		snprintf(fullpath, sizeof(fullpath), "%s/%s", env, clean);
-		if (fp = fopen(fullpath, "r")) {
+		if ((fp = fopen(fullpath, "r"))) {
 			fp_table[file_depth+1] = fp;
-			return -1; } } }
+			return true; } } }
 
-	return 0;
+	return false;
 }
 
 /*
  * Close input file & return to last one
  */
-f_close()
+void f_close(void)
 {
 	fclose(fp_table[file_depth]);
 }
@@ -227,10 +214,9 @@ f_close()
 /*
  * Read a line from the source file, return 1 if end of file,
  */
-get_lin(line)
-	char *line;
+char get_lin(char *line)
 {
-	register int chr, i;
+	int chr, i;
 
 	i = LINE_SIZE;
 	while(--i) {
@@ -250,9 +236,7 @@ get_lin(line)
  * Write character to device indicated by "file"
  * (0 = console, non-0 = output file)
  */
-put_chr(chr, file)
-	char chr;
-	char file;
+void put_chr(char chr, char file)
 {
 	putc(chr, file ? output_fp : stderr);
 }

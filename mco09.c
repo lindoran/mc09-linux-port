@@ -10,13 +10,14 @@
  * **See COPY.TXT**.
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "portab.h"
-#include "6809.mco"			/* Processor specific optimization table */
+#include "6809mco.h"			/* Processor specific optimization table */
 
 #define	PEEP_SIZE	15		/* size of peephole buffer */
 #define	LINE_SIZE	251		/* maximum size of input line */
@@ -47,22 +48,21 @@ static FILE *input_fp = 0, *output_fp = 0;
 /*
  * Read a line into the peephole buffer from the input file.
  */
-static read_line()
+static bool read_line(void)
 {
 	if(fgets(peep_buffer[peep_write], LINE_SIZE, input_fp)) {
 		peep_write = (peep_write+1) % PEEP_SIZE;
-		return 1; }
-	return 0;
+		return true; }
+	return false;
 }
 
 /*
  * Write a line from the peephole buffer to the output file.
  */
-static write_line()
+static void write_line(void)
 {
 	fputs(peep_buffer[peep_read], output_fp);
 	peep_read = (peep_read + 1) % PEEP_SIZE;
-	putc('\n', output_fp);
 }
 
 /*
@@ -72,9 +72,7 @@ static write_line()
  *			-1	= Partial match
  *			n	= Full match ending at entry 'n'
  */
-static compare(ptr, peep)
-	char *ptr;
-	int peep;
+static int compare(char *ptr, unsigned int peep)
 {
 	int i, j;
 	char *ptr1, *ptr2, *ptr3, c, d;
@@ -86,7 +84,7 @@ static compare(ptr, peep)
 		sym_used[i] = 0;
 
 	ptr1 = peep_buffer[peep];
-	while(c = *ptr) {
+	while((c = *ptr)) {
 		if(c == '\n') {				/* end of line */
 			if(*ptr1)
 				return 0;
@@ -138,9 +136,7 @@ static compare(ptr, peep)
 /*
  * Exchange new code for old code in the peephole buffer.
  */
-static exchange(old, ptr)
-	unsigned old;
-	char *ptr;
+static void exchange(unsigned int old, char *ptr)
 {
 	int i, j;
 	char *ptr1, *ptr2, c;
@@ -152,7 +148,7 @@ static exchange(old, ptr)
 			fprintf(stdout,"Take: %s\n", peep_buffer[i]); }
 
 	ptr2 = peep_buffer[peep_read = (old + (PEEP_SIZE-1)) % PEEP_SIZE];
-	while(c = *ptr++) {
+	while((c = *ptr++)) {
 		if(c & 0x80) {
 			ptr1 = symbols[c & SYMMASK];
 			if(c & SYMNOT) {	 		/* Notted symbol */
@@ -178,15 +174,13 @@ static exchange(old, ptr)
 /*
  * Main program, read & optimize assembler source
  */
-main(argc, argv)
-	int argc;
-	char *argv[];
+int main(int argc, char *argv[])
 {
 	int i, j;
-	unsigned char *ptr;
+	char *ptr;
 	int opt;
 #ifdef OPT_LEVEL
-	unsigned char flag;
+	char flag;
 #endif
 
 	/* first process any filenames and command line options */
@@ -247,8 +241,8 @@ main(argc, argv)
 				fclose(input_fp);
 				fclose(output_fp);
 				exit(0); } }
-		for(i=0; ptr = peep_table[i]; i += 2) {
-			if(j = compare(ptr, peep_read)) {	/* we have a match */
+		for(i=0; (ptr = peep_table[i]); i += 2) {
+			if((j = compare(ptr, peep_read))) {	/* we have a match */
 				if(j == -1)						/* partial, wait */
 					break;
 				exchange(j, peep_table[i+1]);

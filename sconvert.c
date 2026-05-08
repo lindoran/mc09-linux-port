@@ -23,8 +23,13 @@
 #include <ctype.h>
 #include "portab.h"
 
-extern char *MC_fgets(char *,size_t,FILE *);
+extern char *MC_fgets(char [],size_t,FILE *);
 extern bool  strbeg(char const *restrict,char const *restrict);
+
+static bool issymbol(char);
+static void substitute(char);
+static void next_field(void);
+static bool issep(char);
 
 #define	MAX_KEEP	200		/* Maximum number of symbols to "keep" */
 #define	MAX_SYMB	300		/* Maximum number of symbols to process */
@@ -32,19 +37,15 @@ extern bool  strbeg(char const *restrict,char const *restrict);
 #define	LINE_SIZE	100		/* Maximum size of input line */
 
 static char com1 = '*', com2 = 0, prefix = '?', quiet = 0;
-
 static int kcount = 0, scount=0, pcount=0;
 static char *keep[MAX_KEEP], *symbols[MAX_SYMB], pool[RAM_POOL];
-
 static char *inptr, inbuf[LINE_SIZE+1], *outptr, outbuf[LINE_SIZE+1];
-
 static FILE *ifp = 0, *ofp = 0;
 
 /*
  * Add an entry to the ram pool & return the address
  */
-char *add_pool(ptr)
-	char *ptr;
+static char *add_pool(char *ptr)
 {
 	int i;
 
@@ -59,10 +60,7 @@ char *add_pool(ptr)
 /*
  * Main program
  */
-main(argc, argv)
-	int argc;
-	char *argv[];
-
+int main(int argc, char *argv[])
 {
 	int i;
 	char c, *ptr;
@@ -148,7 +146,7 @@ main(argc, argv)
 			substitute(-1);
 			next_field();
 			/* And then copy the instruction "verbatium" */
-			while(c = *inptr) {
+			while((c = *inptr)) {
 				if((c == com2) || issep(c))
 					break;
 				*outptr++ = c;
@@ -172,13 +170,12 @@ main(argc, argv)
 /*
  * Process text & perform substitution
  */
-substitute(term)
-	char term;
+static void substitute(char term)
 {
 	char c, buffer[50], *ptr;
 	int i;
 
-	while(c = *inptr) {
+	while((c = *inptr)) {
 		if((term && issep(c)) || (c == com2))
 			break;
 		if(issymbol(c)) {				/* A symbol name */
@@ -198,7 +195,7 @@ substitute(term)
 				do
 					*--ptr = (i%10) + '0';
 				while(i /= 10); }
-			while(c = *ptr++)			/* Copy over buffer */
+			while((c = *ptr++))			/* Copy over buffer */
 				*outptr++ = c;
 			continue; }
 		*outptr++ = c;					/* Anything else */
@@ -213,7 +210,7 @@ substitute(term)
  * Skip to the next field in the input file, and
  * insert a single space in the output file.
  */
-next_field()
+static void next_field(void)
 {
 	/* Skip any trailing blanks */
 	while(issep(*inptr))
@@ -224,8 +221,7 @@ next_field()
 /*
  * Test for a valid symbol name
  */
-issymbol(c)
-	char c;
+static bool issymbol(char c)
 {
 	return ((c >= 'a') && (c <= 'z'))
 		|| ((c >= 'A') && (c <= 'Z'))
@@ -235,8 +231,7 @@ issymbol(c)
 /*
  * Test for a valid separator character
  */
-issep(c)
-	char c;
+static bool issep(char c)
 {
 	return (c == ' ') || (c == '\t');
 }
