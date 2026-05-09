@@ -314,7 +314,7 @@ static void line_error(char *msg)
 static void severe_error(char *msg)
 {
 	line_error(msg);
-	exit(-1);
+	exit(1);
 }
 
 /*
