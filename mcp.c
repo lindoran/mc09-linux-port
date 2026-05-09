@@ -566,7 +566,7 @@ static void resolve_macro(void)
 		while((c = *input_ptr)) {	/* copy over definition */
 			if(c & 0x80) {		/* parameter substitution */
 				++input_ptr;
-				if((i = c & 0x7f) < parm) {
+				if((unsigned)(i = c & 0x7f) < parm) {
 					for(xptr = parm_index[i]; *xptr; ++xptr)
 						*output_ptr++ = *xptr; }
 				continue; }
