@@ -45,7 +45,7 @@ extern unsigned max_errors;			/* Max errors before forced abort */
 #define STRINGIFY_(x) #x
 #define STRINGIFY(x)  STRINGIFY_(x)
 
-static char hello[] = { "DDS MICRO-C " STRINGIFY(CPU) " Compiler\n\
+static char const hello[] = { "DDS MICRO-C " STRINGIFY(CPU) " Compiler\n\
 ?COPY.TXT 1988-2005 Dave Dunfield\n\
 **See COPY.TXT**.\n" };
 
@@ -151,7 +151,7 @@ void put_num(unsigned int value, unsigned int file)
  * Write a string to device indicated by "file"
  * (0 = console, non-0 = output file)
  */
-void put_str(char *ptr, unsigned int file)
+void put_str(char const *ptr, unsigned int file)
 {
 	while(*ptr)
 		put_chr(*ptr++, file);

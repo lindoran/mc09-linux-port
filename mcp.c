@@ -453,7 +453,7 @@ nofix:
 static bool special_symbol(void)
 {
 	unsigned x;
-	static char *months[] = { "???", "Jan", "Feb", "Mar", "Apr",
+	static char const *const months[] = { "???", "Jan", "Feb", "Mar", "Apr",
 		"May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
 	if(*(input_ptr+1) == '_') {
