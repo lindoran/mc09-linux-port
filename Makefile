@@ -47,8 +47,9 @@ _LIB09_SRCS := $(wildcard lib09/*.ASM lib09/*.LIB drivers/*.asm)
 
 .PHONY: all test test-coco coco coco-test usim09-target env clean install
 
-all: mcc09 asm09 mco09 slink slib sindex sconvert cc09 mcp macro \
-     coco coco-test usim09-target env
+all: chain other
+chain: mcc09 asm09 mco09 slink slib sindex sconvert cc09 mcp macro
+other: coco coco-test usim09-target env
 
 # ── target lib09 generation ────────────────────────────────────────────────
 # All target lib09 directories are generated from their config files via
