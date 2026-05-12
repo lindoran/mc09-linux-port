@@ -314,7 +314,7 @@ static void line_error(char *msg)
 static void severe_error(char *msg)
 {
 	line_error(msg);
-	exit(-1);
+	exit(1);
 }
 
 /*
@@ -453,7 +453,7 @@ nofix:
 static bool special_symbol(void)
 {
 	unsigned x;
-	static char *months[] = { "???", "Jan", "Feb", "Mar", "Apr",
+	static char const *const months[] = { "???", "Jan", "Feb", "Mar", "Apr",
 		"May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
 	if(*(input_ptr+1) == '_') {
@@ -566,7 +566,7 @@ static void resolve_macro(void)
 		while((c = *input_ptr)) {	/* copy over definition */
 			if(c & 0x80) {		/* parameter substitution */
 				++input_ptr;
-				if((i = c & 0x7f) < parm) {
+				if((unsigned)(i = c & 0x7f) < parm) {
 					for(xptr = parm_index[i]; *xptr; ++xptr)
 						*output_ptr++ = *xptr; }
 				continue; }

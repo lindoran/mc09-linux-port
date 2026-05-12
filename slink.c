@@ -93,7 +93,7 @@ static FILE *segfp[NUM_SEG] = { 0 } ;
 /* Pool of storage for strings */
 static char string_pool[POOLSIZ], *sp_top = string_pool;
 
-static char help_text[] = { "\n\
+static char const help_text[] = { "\n\
 Use: slink <@infile ...> [opts] <outfile>\n\n\
 Opts:	-c	remove Comments		c=char	Comment character\n\
 	-l	list Libraries		i=file	Index filename\n\
@@ -104,11 +104,11 @@ Opts:	-c	remove Comments		c=char	Comment character\n\
 " };
 
 #ifdef DEMO
-static char hello[] = { "DDS MICRO-C Source Linker (Demo)\n\
+static char const hello[] = { "DDS MICRO-C Source Linker (Demo)\n\
 ?COPY.TXT 1990-2005 Dave Dunfield\n\
 **See COPY.TXT**.\n" };
 #else
-static char hello[] = { "DDS MICRO-C Source Linker\n\
+static char const hello[] = { "DDS MICRO-C Source Linker\n\
 ?COPY.TXT 1990-2005 Dave Dunfield\n\
 **See COPY.TXT**.\n" };
 #endif

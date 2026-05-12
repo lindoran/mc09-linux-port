@@ -233,7 +233,7 @@ extern void compile(void);
 extern void f_close(void);
 extern void put_chr(char,char);
 extern void put_num(unsigned int,unsigned int);
-extern void put_str(char *,unsigned int);
+extern void put_str(char const *,unsigned int);
 extern void severe_error(char *string);
 extern void terminate(int);
 
