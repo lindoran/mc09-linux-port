@@ -31,7 +31,7 @@ static void optfail(void);
 static char chupper(char);
 
 /* 6809 opcode table */
-static unsigned char opcodes[] = {
+static unsigned char const opcodes[] = {
 	'L','B','S','R',0x88,0x17,0xcf,0xcf,0xcf,
 	'L','D','A',	0x82,0x86,0x96,0xa6,0xb6,
 	'C','M','P','A',0x82,0x81,0x91,0xa1,0xb1,
@@ -211,7 +211,7 @@ static char const *const etext[] = { "?",
 	"Improperly delimited string" } ;
 
 /* push pull register translation */
-static unsigned char xlat[] = { 0x06, 0x10, 0x20, 0x40, 0x40, 0x80, 0, 0, 0x02, 0x04,
+static unsigned char const xlat[] = { 0x06, 0x10, 0x20, 0x40, 0x40, 0x80, 0, 0, 0x02, 0x04,
 				0x01, 0x08 } ;
 
 /* Symbol table & free pointer */
