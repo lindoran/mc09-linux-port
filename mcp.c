@@ -814,11 +814,20 @@ static int get_value(void)
 	if(isdigit(skip_blanks())) {
 		while(isdigit(*input_ptr))
 			num = (num * 10) + (*input_ptr++ - '0');
-		return num; }
+		/* Same class of bug as asm09.c/macro.c: on Dunfield's 16-bit-
+		 * int compiler, 'int' (here, this function's return type) is
+		 * 16 bits, so a large #if constant naturally wraps to a 16-bit
+		 * *signed* value. gcc's int is 32-bit and won't wrap the same
+		 * way, so a large decimal literal stays positive here when it
+		 * should have become negative. Cast through 'short' (reliably
+		 * 16-bit signed) to reproduce that truncate-and-reinterpret
+		 * behaviour exactly, rather than a bare mask which would lose
+		 * the sign. */
+		return (short)num; }
 	switch(*input_ptr++) {
 		case '(' :	return expression();
-		case '-' :	return -get_value();
-		case '~' :	return ~get_value();
+		case '-' :	return (short)(0 - get_value());
+		case '~' :	return (short)(~get_value());
 		case '!' :	return !get_value();
 		case '\'' :		/* character value */
 			while(*input_ptr != '\'') {
@@ -826,7 +835,7 @@ static int get_value(void)
 					severe_error("Unterminated string");
 				num = (num << 8) + *input_ptr++; }
 			++input_ptr;
-			return num; }
+			return (short)num; }
 	if(!isname(*--input_ptr))
 		line_error("Invalid constant in expression");
 	while(is_name(*input_ptr))	/* Skip unknown name */
@@ -891,5 +900,12 @@ static int expression(void)
 			default:
 			error:
 				line_error("Invalid operator in expression");
-				return 0; } }
+				return 0; }
+		/* Keep 'value' bounded/sign-correct at every step, the same
+		 * way native 16-bit-int arithmetic always was - '/' '%' and
+		 * the comparisons above are magnitude- and sign-sensitive, so
+		 * an intermediate left unmasked from a prior '+' '*' '<<' etc.
+		 * would diverge from the original semantics the moment one of
+		 * those runs. */
+		value = (short)value; }
 }

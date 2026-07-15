@@ -531,7 +531,7 @@ static unsigned int get_number(char const *ptr)
 static void lookup(char *symbol)
 {
 	int i;
-	char buffer[LINESIZ+1], filelist[LINESIZ], *ptr, flag;
+	char buffer[LINESIZ+1], filelist[LINESIZ], *ptr, flag = 0;
 
 	/* Parse symbol from input line */
 	while(isspace(*symbol))		/* Skip leading blanks */
@@ -560,6 +560,7 @@ static void lookup(char *symbol)
 	while(MC_fgets(buffer, LINESIZ, index_fp)) switch(*buffer) {
 		case '-' :		/* Library filename entry */
 			safestrcpy(filelist, sizeof(filelist), &buffer[1]);
+			flag = '-';
 			break;
 		case '<' :		/* Prefix filename */
 		case '^' :		/* Middle filename */

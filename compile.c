@@ -597,7 +597,20 @@ cs:		do {
 		unsigned int i;
 		++input_pos;
 		while(!((i = read_special(0x27)) & 0xff00))
-			gvalue = (gvalue << 8) + i;
+			/* Same class of bug as asm09.c getval()'s '=' case and
+			 * macro.c/mcp.c's quote-literal accumulation: on Dunfield's
+			 * 16-bit-int compiler, this shift wraps at 16 bits for
+			 * free, so a 3+ character constant like 'ABC' naturally
+			 * keeps only the last 2 characters. gcc's 32-bit unsigned
+			 * doesn't wrap, so the extra characters survive as high
+			 * bits instead of being discarded - harmless for a plain
+			 * 16-bit load (write_oper's flag==0 case survives via
+			 * decimal-string mod-65536 round-tripping through the now-
+			 * fixed assembler), but wrong for a byte-split load
+			 * (write_oper's flag==1/2 cases shift/mask the raw
+			 * unmasked value directly, with no assembler safety net).
+			 * Masked here to match original semantics exactly. */
+			gvalue = ((gvalue << 8) + i) & 0xFFFF;
 		return NUMBER; }
 
 	if(is_num(chr)) {					/* numeric constant */

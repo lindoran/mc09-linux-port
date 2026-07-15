@@ -1001,7 +1001,14 @@ static int getval(void)
 			return ~getval();
 		case '=' :				/* Swap high and low bytes */
 			i=getval();
-			return (i<<8)+(i>>8);
+			/* On Dunfield's original 16-bit-int compiler, i<<8
+			 * wraps at 16 bits for free, making this a genuine
+			 * byte-swap. gcc's 32-bit unsigned doesn't, so the
+			 * shift must be masked explicitly to reproduce that
+			 * behaviour (this feeds SETDP =RAM's direct-page
+			 * optimization; without the mask curdp never matches
+			 * a real address and the optimizer never fires). */
+			return ((i<<8)&0xFFFF)+(i>>8);
 		case '(' :				/* Nested expression */
 			val = eval();
 			if(operand[optr-1] != ')')

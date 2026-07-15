@@ -591,12 +591,27 @@ DEBUG(("GET_VALUE: %s\n", input_ptr))
 			for(ptr = x; i; --i) {
 				if((unsigned)(c = *ptr++ - '0') >= b)
 					quit("Invalid numeric constant");
+				/* Same class of bug as asm09.c getval()'s '=' case:
+				 * on Dunfield's 16-bit-int compiler this multiply/add
+				 * wrapped at 16 bits for free on every step. gcc's
+				 * unsigned is 32-bit, so a large decimal/hex constant
+				 * can grow past 16 bits before truncation - masked
+				 * explicitly at the return below to match. */
 				num = (num * b) + c; }
-		return num; }
+		return num & 0xFFFF; }
 	switch(*input_ptr++) {
 		case '(' :	return expression();
-		case '-' :	return -get_value();
-		case '~' :	return ~get_value();
+		/* '-'/'~' rely on the same 16-bit-int assumption: on the
+		 * original compiler, negating/complementing a 16-bit value
+		 * produces another 16-bit value by construction. Under gcc's
+		 * 32-bit unsigned, an unmasked result carries high bits that
+		 * don't exist in the original semantics - harmless for add,
+		 * subtract, multiply, shift, and, or, xor (all mod-2^16
+		 * compatible), but wrong if this value ever reaches a
+		 * magnitude-sensitive op (/, %, comparison) before truncation.
+		 * Masked here for the same reason as asm09.c. */
+		case '-' :	return (0 - get_value()) & 0xFFFF;
+		case '~' :	return (~get_value()) & 0xFFFF;
 		case '!' :	return !get_value();
 		case '\'' :		/* character value */
 			while(*input_ptr != '\'') {
@@ -604,7 +619,7 @@ DEBUG(("GET_VALUE: %s\n", input_ptr))
 					quit("Unterminated string");
 				num = (num << 8) + *input_ptr++; }
 			++input_ptr;
-			return num; }
+			return num & 0xFFFF; }
 	quit("Invalid constant in expression");
 	return 0; /* shut up compiler warning */
 }
@@ -617,6 +632,17 @@ static unsigned expression(void)
 	unsigned value;
 
 DEBUG(("Expression: %s\n", input_ptr))
+	/* get_value() already returns 16-bit-masked operands (see above), but
+	 * '+' '*' '<<' etc. below can still push 'value' itself past 16 bits
+	 * in a single step (e.g. two large 16-bit operands added together).
+	 * That's harmless for the mod-2^16-compatible operators (+ - * << &
+	 * | ^) themselves, but '/' '%' and the comparisons are magnitude-
+	 * sensitive: if 'value' is carrying unmasked high bits from a
+	 * previous step when one of those runs, the result diverges from
+	 * what the original 16-bit-int compiler would produce. Masking
+	 * 'value' after every step (below) keeps it bounded the same way
+	 * hardware-native 16-bit arithmetic always was, so this can never
+	 * happen regardless of operator order. */
 	value = get_value();
 	for(;;) {
 		input_ptr = skip_blank(input_ptr);
@@ -669,5 +695,6 @@ DEBUG(("Expression: %s\n", input_ptr))
 				quit("Invalid operator in expression");
 				break;
 		}
+		value &= 0xFFFF;
 	}
 }
